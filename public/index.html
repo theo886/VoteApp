@@ -2,22 +2,25 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Idea Rating App</title>
+  <title>One-Vote-Per-User App</title>
   <script src="/socket.io/socket.io.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body { font-family: Arial, sans-serif; padding: 20px; }
-    #resultsChart {
-      cursor: crosshair; /* Indicates you can click to vote */
+    #resultsChart { cursor: crosshair; }
+    #alreadyVotedMessage {
+      color: red;
+      display: none; /* Hidden by default */
     }
   </style>
 </head>
 <body>
   <h1>Rate the Idea</h1>
-  <p>Click anywhere on the chart to vote. Effort is on the X-axis, Impact is on the Y-axis.</p>
+  <p>Click on the chart to vote. Effort is on X-axis, Impact is on Y-axis. One vote per browser!</p>
 
   <button id="resetVotes">Reset</button>
   <h2>Vote Count: <span id="voteCountDisplay">0</span></h2>
+  <div id="alreadyVotedMessage">You have already voted!</div>
 
   <h2>Current Averages</h2>
   <canvas id="resultsChart" width="600" height="400"></canvas>
@@ -26,10 +29,16 @@
     const socket = io();
     const resetButton = document.getElementById('resetVotes');
     const voteCountDisplay = document.getElementById('voteCountDisplay');
+    const alreadyVotedMessage = document.getElementById('alreadyVotedMessage');
 
-    // Initialize the scatter plot with two datasets:
-    // 1) All Votes
-    // 2) Average
+    // Generate or retrieve userId from localStorage
+    let userId = localStorage.getItem('userId');
+    if (!userId) {
+      userId = Math.random().toString(36).substr(2, 9);
+      localStorage.setItem('userId', userId);
+    }
+
+    // Create chart with two datasets: all votes + average
     const ctx = document.getElementById('resultsChart').getContext('2d');
     const resultsChart = new Chart(ctx, {
       type: 'scatter',
@@ -37,14 +46,14 @@
         datasets: [
           {
             label: 'All Votes',
-            data: [], // Will be updated with individual votes
+            data: [],
             backgroundColor: 'rgba(255, 99, 132, 0.6)',
             borderColor: 'rgba(255, 99, 132, 1)',
             pointRadius: 4
           },
           {
             label: 'Average',
-            data: [{ x: 0, y: 0 }], // Single point for the average
+            data: [{ x: 0, y: 0 }],
             backgroundColor: 'rgba(75, 192, 192, 0.6)',
             borderColor: 'rgba(75, 192, 192, 1)',
             pointRadius: 6
@@ -59,7 +68,6 @@
             max: 10,
             grid: {
               color: (context) => {
-                // Make the line at x=5 bolder
                 return context.tick.value === 5 ? '#000' : '#ccc';
               }
             },
@@ -75,7 +83,6 @@
             max: 10,
             grid: {
               color: (context) => {
-                // Make the line at y=5 bolder
                 return context.tick.value === 5 ? '#000' : '#ccc';
               }
             },
@@ -89,47 +96,51 @@
       }
     });
 
-    // When user clicks the chart, capture x=Effort, y=Impact
+    // Handle chart click (submit a vote)
     resultsChart.canvas.addEventListener('click', (evt) => {
       const xScale = resultsChart.scales.x;
       const yScale = resultsChart.scales.y;
 
-      // Convert the pixel position into chart data coordinates
       const xValue = xScale.getValueForPixel(evt.offsetX);
       const yValue = yScale.getValueForPixel(evt.offsetY);
 
-      // Clamp to [0..10], then round to nearest integer
       const effort = Math.round(Math.min(Math.max(xValue, 0), 10));
       const impact = Math.round(Math.min(Math.max(yValue, 0), 10));
 
-      // Emit the vote to the server
-      socket.emit('newVote', { effort, impact });
+      // Hide any old "already voted" message
+      alreadyVotedMessage.style.display = 'none';
+
+      socket.emit('newVote', { userId, effort, impact });
     });
 
     // Reset votes
     resetButton.addEventListener('click', () => {
       socket.emit('reset');
+      // Also hide the "already voted" message
+      alreadyVotedMessage.style.display = 'none';
     });
 
-    // Listen for updates from the server
+    // Listen for updates
     socket.on('update', (data) => {
-      // Plot all individual votes in the first dataset
+      // All individual votes
       resultsChart.data.datasets[0].data = data.allVotes.map(v => ({
         x: v.effort,
         y: v.impact
       }));
-
-      // Update the single average point in the second dataset
+      // Average
       resultsChart.data.datasets[1].data = [{
         x: data.averageEffort,
         y: data.averageImpact
       }];
-
-      // Update the vote count
+      // Vote count
       voteCountDisplay.textContent = data.voteCount;
-
-      // Redraw the chart
+      // Update chart
       resultsChart.update();
+    });
+
+    // If the server says user has already voted
+    socket.on('alreadyVoted', () => {
+      alreadyVotedMessage.style.display = 'block';
     });
   </script>
 </body>
