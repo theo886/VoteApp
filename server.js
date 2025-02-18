@@ -63,22 +63,24 @@ io.on('connection', (socket) => {
 
   // 3) Reset everything
   socket.on('reset', () => {
-    totalEffort = 0;
-    totalImpact = 0;
-    voteCount = 0;
-    votes = [];
+  totalEffort = 0;
+  totalImpact = 0;
+  voteCount = 0;
+  votes = [];
 
-    // Remove everyone from the "voters" room
-    io.in('voters').socketsLeave('voters');
+  // Remove everyone from the "voters" room
+  io.in('voters').socketsLeave('voters');
 
-    // Broadcast zero data to "voters" (now empty) is optional,
-    // but we do want to broadcast the new (zero) vote count to everyone
-    io.emit('voteCount', { voteCount: 0 });
+  // 1) Broadcast empty chart data to ALL clients (clears the chart visually)
+  io.emit('update', {
+    averageEffort: 0,
+    averageImpact: 0,
+    voteCount: 0,
+    allVotes: []
   });
 
-  socket.on('disconnect', () => {
-    console.log('Client disconnected');
-  });
+  // 2) Also broadcast the new (zero) vote count to everyone
+  io.emit('voteCount', { voteCount: 0 });
 });
 
 // Helper function to package current data
