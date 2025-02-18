@@ -8,7 +8,6 @@
   <script src="/socket.io/socket.io.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    /* Minimal layout: a square chart, legend at bottom, reset + vote count. */
     body {
       margin: 0;
       padding: 0;
@@ -27,7 +26,7 @@
     #resultsChart {
       width: 100%;
       height: 100%;
-      cursor: crosshair;
+      cursor: crosshair; /* Click to vote */
     }
     .bottom-bar {
       width: 100%;
@@ -67,13 +66,10 @@
       localStorage.setItem('userId', userId);
     }
 
-    // Immediately tell the server who we are
+    // Immediately tell the server our userId so it can check if we've voted before
     socket.emit('register', { userId });
 
-    // Set up a chart with three datasets:
-    // 0: Other Votes
-    // 1: Your Vote
-    // 2: Average
+    // Create a chart with 3 datasets: other votes, your vote, average
     const ctx = document.getElementById('resultsChart').getContext('2d');
     const resultsChart = new Chart(ctx, {
       type: 'scatter',
@@ -117,7 +113,6 @@
             max: 10,
             grid: {
               color: (context) => {
-                // Bold line at x=5
                 return context.tick.value === 5 ? '#000' : '#ccc';
               }
             },
@@ -133,7 +128,6 @@
             max: 10,
             grid: {
               color: (context) => {
-                // Bold line at y=5
                 return context.tick.value === 5 ? '#000' : '#ccc';
               }
             },
@@ -147,7 +141,7 @@
       }
     });
 
-    // Click the chart to cast or update your vote
+    // Clicking the chart casts/updates your vote
     resultsChart.canvas.addEventListener('click', (evt) => {
       const xScale = resultsChart.scales.x;
       const yScale = resultsChart.scales.y;
@@ -166,19 +160,24 @@
       socket.emit('reset');
     });
 
-    // Receive updates only if we've joined the "voters" room (server side logic)
+    // 1) We always get 'voteCount' updates, even if we haven't voted
+    socket.on('voteCount', (data) => {
+      voteCountDisplay.textContent = data.voteCount;
+    });
+
+    // 2) We only get 'update' if we're in the "voters" room
     socket.on('update', (data) => {
-      // Separate out the current user's vote
+      // Separate out current user's vote
       const userVote = data.allVotes.find(v => v.userId === userId);
       const otherVotes = data.allVotes.filter(v => v.userId !== userId);
 
-      // Show other votes
+      // Other Votes
       resultsChart.data.datasets[0].data = otherVotes.map(v => ({
         x: v.effort,
         y: v.impact
       }));
 
-      // Show your own vote
+      // Your Vote
       if (userVote) {
         resultsChart.data.datasets[1].data = [{
           x: userVote.effort,
@@ -188,14 +187,11 @@
         resultsChart.data.datasets[1].data = [];
       }
 
-      // Show average
+      // Average
       resultsChart.data.datasets[2].data = [{
         x: data.averageEffort,
         y: data.averageImpact
       }];
-
-      // Update vote count
-      voteCountDisplay.textContent = data.voteCount;
 
       // Redraw chart
       resultsChart.update();
