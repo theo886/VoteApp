@@ -2,25 +2,22 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>One-Vote-Per-User App</title>
+  <title>Idea Rating App</title>
   <script src="/socket.io/socket.io.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body { font-family: Arial, sans-serif; padding: 20px; }
-    #resultsChart { cursor: crosshair; }
-    #alreadyVotedMessage {
-      color: red;
-      display: none; /* Hidden by default */
+    #resultsChart {
+      cursor: crosshair; /* Indicates you can click to vote */
     }
   </style>
 </head>
 <body>
   <h1>Rate the Idea</h1>
-  <p>Click on the chart to vote. Effort is on X-axis, Impact is on Y-axis. One vote per browser!</p>
+  <p>Click on the chart to vote or update your vote. Effort is on X-axis, Impact is on Y-axis.</p>
 
   <button id="resetVotes">Reset</button>
   <h2>Vote Count: <span id="voteCountDisplay">0</span></h2>
-  <div id="alreadyVotedMessage">You have already voted!</div>
 
   <h2>Current Averages</h2>
   <canvas id="resultsChart" width="600" height="400"></canvas>
@@ -29,27 +26,36 @@
     const socket = io();
     const resetButton = document.getElementById('resetVotes');
     const voteCountDisplay = document.getElementById('voteCountDisplay');
-    const alreadyVotedMessage = document.getElementById('alreadyVotedMessage');
 
-    // Generate or retrieve userId from localStorage
+    // Generate or retrieve a userId from localStorage
     let userId = localStorage.getItem('userId');
     if (!userId) {
       userId = Math.random().toString(36).substr(2, 9);
       localStorage.setItem('userId', userId);
     }
 
-    // Create chart with two datasets: all votes + average
+    // Create the chart with three datasets:
+    // 0: Other Votes
+    // 1: Your Vote
+    // 2: Average
     const ctx = document.getElementById('resultsChart').getContext('2d');
     const resultsChart = new Chart(ctx, {
       type: 'scatter',
       data: {
         datasets: [
           {
-            label: 'All Votes',
+            label: 'Other Votes',
             data: [],
             backgroundColor: 'rgba(255, 99, 132, 0.6)',
             borderColor: 'rgba(255, 99, 132, 1)',
             pointRadius: 4
+          },
+          {
+            label: 'Your Vote',
+            data: [],
+            backgroundColor: 'rgba(54, 162, 235, 0.6)',
+            borderColor: 'rgba(54, 162, 235, 1)',
+            pointRadius: 6
           },
           {
             label: 'Average',
@@ -68,6 +74,7 @@
             max: 10,
             grid: {
               color: (context) => {
+                // Make line at x=5 bolder
                 return context.tick.value === 5 ? '#000' : '#ccc';
               }
             },
@@ -83,6 +90,7 @@
             max: 10,
             grid: {
               color: (context) => {
+                // Make line at y=5 bolder
                 return context.tick.value === 5 ? '#000' : '#ccc';
               }
             },
@@ -96,7 +104,7 @@
       }
     });
 
-    // Handle chart click (submit a vote)
+    // Clicking the chart casts or updates the user's vote
     resultsChart.canvas.addEventListener('click', (evt) => {
       const xScale = resultsChart.scales.x;
       const yScale = resultsChart.scales.y;
@@ -107,40 +115,47 @@
       const effort = Math.round(Math.min(Math.max(xValue, 0), 10));
       const impact = Math.round(Math.min(Math.max(yValue, 0), 10));
 
-      // Hide any old "already voted" message
-      alreadyVotedMessage.style.display = 'none';
-
       socket.emit('newVote', { userId, effort, impact });
     });
 
     // Reset votes
     resetButton.addEventListener('click', () => {
       socket.emit('reset');
-      // Also hide the "already voted" message
-      alreadyVotedMessage.style.display = 'none';
     });
 
     // Listen for updates
     socket.on('update', (data) => {
-      // All individual votes
-      resultsChart.data.datasets[0].data = data.allVotes.map(v => ({
+      // Separate out the current user's vote
+      const userVote = data.allVotes.find(v => v.userId === userId);
+      const otherVotes = data.allVotes.filter(v => v.userId !== userId);
+
+      // Dataset 0: Other Votes
+      resultsChart.data.datasets[0].data = otherVotes.map(v => ({
         x: v.effort,
         y: v.impact
       }));
-      // Average
-      resultsChart.data.datasets[1].data = [{
+
+      // Dataset 1: Your Vote (just one point if it exists)
+      if (userVote) {
+        resultsChart.data.datasets[1].data = [{
+          x: userVote.effort,
+          y: userVote.impact
+        }];
+      } else {
+        resultsChart.data.datasets[1].data = [];
+      }
+
+      // Dataset 2: Average
+      resultsChart.data.datasets[2].data = [{
         x: data.averageEffort,
         y: data.averageImpact
       }];
-      // Vote count
-      voteCountDisplay.textContent = data.voteCount;
-      // Update chart
-      resultsChart.update();
-    });
 
-    // If the server says user has already voted
-    socket.on('alreadyVoted', () => {
-      alreadyVotedMessage.style.display = 'block';
+      // Update vote count
+      voteCountDisplay.textContent = data.voteCount;
+
+      // Redraw the chart
+      resultsChart.update();
     });
   </script>
 </body>
