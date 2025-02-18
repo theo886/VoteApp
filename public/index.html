@@ -16,26 +16,35 @@
       flex-direction: column;
       align-items: center;
     }
+
+    /* A square chart container with padding */
     .chart-container {
       width: 100%;
       max-width: 600px;
       aspect-ratio: 1 / 1;
       max-height: 60vh;
       position: relative;
+      padding: 1rem;           /* Padding around the chart */
+      box-sizing: border-box;  /* Ensures padding doesn't overflow container */
     }
+
     #resultsChart {
       width: 100%;
       height: 100%;
-      cursor: crosshair; /* Click to vote */
+      cursor: crosshair; /* Indicates you can click to vote */
     }
+
+    /* Center the Reset button & vote count */
     .bottom-bar {
       width: 100%;
       max-width: 600px;
       display: flex;
-      justify-content: space-between;
+      justify-content: center; /* Center horizontally */
       align-items: center;
-      padding: 0.5rem;
+      gap: 2rem;               /* Space between button & count */
+      padding: 1rem;
     }
+
     button {
       padding: 0.5rem 1rem;
       font-size: 1rem;
@@ -59,17 +68,20 @@
     const resetButton = document.getElementById('resetVotes');
     const voteCountDisplay = document.getElementById('voteCountDisplay');
 
-    // Each browser has a persistent userId
+    // Generate or retrieve userId
     let userId = localStorage.getItem('userId');
     if (!userId) {
       userId = Math.random().toString(36).substr(2, 9);
       localStorage.setItem('userId', userId);
     }
 
-    // Immediately tell the server our userId so it can check if we've voted before
+    // Register with the server
     socket.emit('register', { userId });
 
-    // Create a chart with 3 datasets: other votes, your vote, average
+    // Create the chart with 3 datasets:
+    // 0: Other Votes
+    // 1: Your Vote
+    // 2: Average
     const ctx = document.getElementById('resultsChart').getContext('2d');
     const resultsChart = new Chart(ctx, {
       type: 'scatter',
@@ -113,6 +125,7 @@
             max: 10,
             grid: {
               color: (context) => {
+                // Make line at x=5 bolder
                 return context.tick.value === 5 ? '#000' : '#ccc';
               }
             },
@@ -128,6 +141,7 @@
             max: 10,
             grid: {
               color: (context) => {
+                // Make line at y=5 bolder
                 return context.tick.value === 5 ? '#000' : '#ccc';
               }
             },
@@ -141,7 +155,7 @@
       }
     });
 
-    // Clicking the chart casts/updates your vote
+    // Click to vote
     resultsChart.canvas.addEventListener('click', (evt) => {
       const xScale = resultsChart.scales.x;
       const yScale = resultsChart.scales.y;
@@ -155,19 +169,18 @@
       socket.emit('newVote', { userId, effort, impact });
     });
 
-    // Reset everything
+    // Reset
     resetButton.addEventListener('click', () => {
       socket.emit('reset');
     });
 
-    // 1) We always get 'voteCount' updates, even if we haven't voted
+    // Always get updated vote count
     socket.on('voteCount', (data) => {
       voteCountDisplay.textContent = data.voteCount;
     });
 
-    // 2) We only get 'update' if we're in the "voters" room
+    // Only get 'update' if we're in the "voters" room
     socket.on('update', (data) => {
-      // Separate out current user's vote
       const userVote = data.allVotes.find(v => v.userId === userId);
       const otherVotes = data.allVotes.filter(v => v.userId !== userId);
 
@@ -193,7 +206,6 @@
         y: data.averageImpact
       }];
 
-      // Redraw chart
       resultsChart.update();
     });
   </script>
