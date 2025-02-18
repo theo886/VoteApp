@@ -2,67 +2,64 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <!-- Ensures the page scales properly on mobile -->
+  <!-- Helps with mobile scaling -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Idea Rating App</title>
   <script src="/socket.io/socket.io.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
-    /* Basic reset for mobile-friendly layout */
     body {
       margin: 0;
       padding: 0;
       font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
     }
 
-    /* Wrap content in a little padding for breathing room */
-    .container {
-      padding: 1rem;
-    }
-
-    /* Button styling */
-    button {
-      padding: 0.5rem 1rem;
-      font-size: 1rem;
-      margin-right: 1rem;
-      margin-top: 0.5rem;
-    }
-
-    /* A responsive container for the chart */
-    #chartContainer {
-      position: relative;
+    /* A container that ensures a square aspect ratio,
+       but limits height to 60vh. */
+    .chart-container {
       width: 100%;
-      /* Use a percentage of the viewport height so it scales on mobile */
-      height: 60vh;
-      min-height: 300px; /* Just so it's not too small on bigger screens */
-      margin-top: 1rem;
+      max-width: 600px; /* Optional max width if you like */
+      aspect-ratio: 1 / 1;
+      max-height: 60vh;
+      position: relative;
     }
 
-    /* Let Chart.js handle sizing within this container */
+    /* Let Chart.js handle responsive sizing inside the container */
     #resultsChart {
       width: 100%;
       height: 100%;
+      cursor: crosshair; /* Indicates you can click to vote */
     }
 
-    h1, h2, p {
-      margin: 0.5rem 0;
+    /* Bottom row with Reset button and vote count */
+    .bottom-bar {
+      width: 100%;
+      max-width: 600px; /* Match chart container max-width */
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.5rem;
+    }
+
+    button {
+      padding: 0.5rem 1rem;
+      font-size: 1rem;
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>Rate the Idea</h1>
-    <p>Tap on the chart to vote or update your vote. Effort is on X-axis, Impact is on Y-axis.</p>
+  <!-- Square chart container -->
+  <div class="chart-container">
+    <canvas id="resultsChart"></canvas>
+  </div>
 
+  <!-- Bottom bar with Reset and vote count -->
+  <div class="bottom-bar">
     <button id="resetVotes">Reset</button>
-    <h2>Vote Count: <span id="voteCountDisplay">0</span></h2>
-
-    <h2>Current Averages</h2>
-
-    <!-- Responsive chart container -->
-    <div id="chartContainer">
-      <canvas id="resultsChart"></canvas>
-    </div>
+    <span>Vote Count: <span id="voteCountDisplay">0</span></span>
   </div>
 
   <script>
@@ -111,7 +108,12 @@
       },
       options: {
         responsive: true,
-        maintainAspectRatio: false, // Allows the chart to fill the container
+        maintainAspectRatio: false, /* Let the container control aspect ratio */
+        plugins: {
+          legend: {
+            position: 'bottom' /* Put the legend below the chart */
+          }
+        },
         scales: {
           x: {
             type: 'linear',
