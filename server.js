@@ -9,7 +9,11 @@ const io = socketIo(server);
 let totalEffort = 0;
 let totalImpact = 0;
 let voteCount = 0;
-// Store individual votes here
+
+// Keep track of who has voted (by userId)
+const votedUsers = new Set();
+
+// Store individual votes so we can plot them all
 let votes = [];
 
 app.use(express.static('public'));
@@ -17,7 +21,7 @@ app.use(express.static('public'));
 io.on('connection', (socket) => {
   console.log('New client connected');
 
-  // Send the current averages, vote count, and all individual votes
+  // Send the current averages, vote count, and all votes
   socket.emit('update', {
     averageEffort: voteCount ? totalEffort / voteCount : 0,
     averageImpact: voteCount ? totalImpact / voteCount : 0,
@@ -25,16 +29,26 @@ io.on('connection', (socket) => {
     allVotes: votes
   });
 
+  // Handle new votes
   socket.on('newVote', (data) => {
-    const { effort, impact } = data;
+    const { userId, effort, impact } = data;
+
+    // If userId is already in votedUsers, ignore the vote
+    if (votedUsers.has(userId)) {
+      console.log(`User ${userId} already voted.`);
+      // Optionally send a message back that they've already voted
+      socket.emit('alreadyVoted');
+      return;
+    }
+
+    // Otherwise, record the vote
+    votedUsers.add(userId);
     totalEffort += effort;
     totalImpact += impact;
     voteCount++;
 
-    // Store this new vote
     votes.push({ effort, impact });
 
-    // Broadcast updated averages and all votes
     io.emit('update', {
       averageEffort: totalEffort / voteCount,
       averageImpact: totalImpact / voteCount,
@@ -43,12 +57,13 @@ io.on('connection', (socket) => {
     });
   });
 
+  // Handle reset
   socket.on('reset', () => {
-    // Reset everything
     totalEffort = 0;
     totalImpact = 0;
     voteCount = 0;
     votes = [];
+    votedUsers.clear();
 
     io.emit('update', {
       averageEffort: 0,
