@@ -16,7 +16,6 @@
       flex-direction: column;
       align-items: center;
     }
-
     /* Chart container styling */
     .chart-container {
       width: 100%;
@@ -27,13 +26,11 @@
       padding: 1rem;
       box-sizing: border-box;
     }
-
     #resultsChart {
       width: 100%;
       height: 100%;
       cursor: crosshair;
     }
-
     /* Bottom bar styling */
     .bottom-bar {
       width: 100%;
@@ -45,12 +42,10 @@
       gap: 1rem;
       padding: 1rem;
     }
-
     button {
       padding: 0.5rem 1rem;
       font-size: 1rem;
     }
-
     .toggle-container {
       display: flex;
       align-items: center;
@@ -78,4 +73,121 @@
   <script>
     const socket = io();
     const resetButton = document.getElementById('resetVotes');
-    const copyButton = document.getElementById('c
+    const copyButton = document.getElementById('copyVote');
+    const voteCountDisplay = document.getElementById('voteCountDisplay');
+    const toggleScaleCheckbox = document.getElementById('toggleScale');
+
+    // Generate or retrieve userId
+    let userId = localStorage.getItem('userId');
+    if (!userId) {
+      userId = Math.random().toString(36).substr(2, 9);
+      localStorage.setItem('userId', userId);
+    }
+
+    // Register with the server
+    socket.emit('register', { userId });
+
+    // Default rating scale settings: 1-5
+    let ratingMin = 1;
+    let ratingMax = 5;
+
+    // Create the Chart.js scatter chart
+    const ctx = document.getElementById('resultsChart').getContext('2d');
+    const resultsChart = new Chart(ctx, {
+      type: 'scatter',
+      data: {
+        datasets: [
+          {
+            label: 'Other Votes',
+            data: [],
+            backgroundColor: 'rgba(255, 99, 132, 0.6)',
+            borderColor: 'rgba(255, 99, 132, 1)',
+            pointRadius: 4,
+            pointStyle: 'circle'
+          },
+          {
+            label: 'Your Vote',
+            data: [],
+            backgroundColor: 'rgba(54, 162, 235, 0.6)',
+            borderColor: 'rgba(54, 162, 235, 1)',
+            pointRadius: 6,
+            pointStyle: 'circle'
+          },
+          {
+            label: 'Average',
+            // Default to center of current scale so it’s visible
+            data: [{ x: (ratingMin + ratingMax) / 2, y: (ratingMin + ratingMax) / 2 }],
+            backgroundColor: 'rgba(75, 192, 192, 0.6)',
+            borderColor: 'rgba(75, 192, 192, 1)',
+            pointRadius: 6,
+            pointStyle: 'circle'
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: {
+              // Use circle point style in the legend
+              usePointStyle: true
+            }
+          }
+        },
+        scales: {
+          x: {
+            type: 'linear',
+            min: ratingMin,
+            max: ratingMax,
+            grid: {
+              color: function(context) {
+                const mid = Math.round((ratingMin + ratingMax) / 2);
+                return context.tick.value === mid ? '#000' : '#ccc';
+              }
+            },
+            ticks: { stepSize: 1 },
+            title: {
+              display: true,
+              text: 'Effort',
+              font: { size: 24 }
+            }
+          },
+          y: {
+            type: 'linear',
+            min: ratingMin,
+            max: ratingMax,
+            grid: {
+              color: function(context) {
+                const mid = Math.round((ratingMin + ratingMax) / 2);
+                return context.tick.value === mid ? '#000' : '#ccc';
+              }
+            },
+            ticks: { stepSize: 1 },
+            title: {
+              display: true,
+              text: 'Impact',
+              font: { size: 24 }
+            }
+          }
+        }
+      }
+    });
+
+    // Toggle scale change between 1-5 and 0-10
+    toggleScaleCheckbox.addEventListener('change', () => {
+      if (toggleScaleCheckbox.checked) {
+        ratingMin = 0;
+        ratingMax = 10;
+      } else {
+        ratingMin = 1;
+        ratingMax = 5;
+      }
+      updateScaleConfig(ratingMin, ratingMax);
+    });
+
+    function updateScaleConfig(minVal, maxVal) {
+      const mid = Math.round((minVal + maxVal) / 2);
+      resultsChart.options.scales.x.min = minVal;
+      resultsChart.options.scales.x.max =
