@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <!-- Helps with mobile scaling -->
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Idea Rating App</title>
   <script src="/socket.io/socket.io.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -17,31 +17,32 @@
       align-items: center;
     }
 
-    /* A container that ensures a square aspect ratio,
-       but limits height to 60vh. */
+    /* A square chart container with padding */
     .chart-container {
       width: 100%;
-      max-width: 600px; /* Optional max width if you like */
+      max-width: 600px;
       aspect-ratio: 1 / 1;
       max-height: 60vh;
       position: relative;
+      padding: 1rem;           /* Padding around the chart */
+      box-sizing: border-box;  /* Ensures padding doesn't overflow container */
     }
 
-    /* Let Chart.js handle responsive sizing inside the container */
     #resultsChart {
       width: 100%;
       height: 100%;
       cursor: crosshair; /* Indicates you can click to vote */
     }
 
-    /* Bottom row with Reset button and vote count */
+    /* Center the Reset button & vote count */
     .bottom-bar {
       width: 100%;
-      max-width: 600px; /* Match chart container max-width */
+      max-width: 600px;
       display: flex;
-      justify-content: space-between;
+      justify-content: center; /* Center horizontally */
       align-items: center;
-      padding: 0.5rem;
+      gap: 2rem;               /* Space between button & count */
+      padding: 1rem;
     }
 
     button {
@@ -67,14 +68,17 @@
     const resetButton = document.getElementById('resetVotes');
     const voteCountDisplay = document.getElementById('voteCountDisplay');
 
-    // Generate or retrieve a userId from localStorage
+    // Generate or retrieve userId
     let userId = localStorage.getItem('userId');
     if (!userId) {
       userId = Math.random().toString(36).substr(2, 9);
       localStorage.setItem('userId', userId);
     }
 
-    // Create the chart with three datasets:
+    // Register with the server
+    socket.emit('register', { userId });
+
+    // Create the chart with 3 datasets:
     // 0: Other Votes
     // 1: Your Vote
     // 2: Average
@@ -108,10 +112,10 @@
       },
       options: {
         responsive: true,
-        maintainAspectRatio: false, /* Let the container control aspect ratio */
+        maintainAspectRatio: false,
         plugins: {
           legend: {
-            position: 'bottom' /* Put the legend below the chart */
+            position: 'bottom'
           }
         },
         scales: {
@@ -151,7 +155,7 @@
       }
     });
 
-    // Clicking the chart casts or updates the user's vote
+    // Click to vote
     resultsChart.canvas.addEventListener('click', (evt) => {
       const xScale = resultsChart.scales.x;
       const yScale = resultsChart.scales.y;
@@ -165,24 +169,28 @@
       socket.emit('newVote', { userId, effort, impact });
     });
 
-    // Reset votes
+    // Reset
     resetButton.addEventListener('click', () => {
       socket.emit('reset');
     });
 
-    // Listen for updates
+    // Always get updated vote count
+    socket.on('voteCount', (data) => {
+      voteCountDisplay.textContent = data.voteCount;
+    });
+
+    // Only get 'update' if we're in the "voters" room
     socket.on('update', (data) => {
-      // Separate out the current user's vote
       const userVote = data.allVotes.find(v => v.userId === userId);
       const otherVotes = data.allVotes.filter(v => v.userId !== userId);
 
-      // Dataset 0: Other Votes
+      // Other Votes
       resultsChart.data.datasets[0].data = otherVotes.map(v => ({
         x: v.effort,
         y: v.impact
       }));
 
-      // Dataset 1: Your Vote (just one point if it exists)
+      // Your Vote
       if (userVote) {
         resultsChart.data.datasets[1].data = [{
           x: userVote.effort,
@@ -192,16 +200,12 @@
         resultsChart.data.datasets[1].data = [];
       }
 
-      // Dataset 2: Average
+      // Average
       resultsChart.data.datasets[2].data = [{
         x: data.averageEffort,
         y: data.averageImpact
       }];
 
-      // Update vote count
-      voteCountDisplay.textContent = data.voteCount;
-
-      // Redraw the chart
       resultsChart.update();
     });
   </script>

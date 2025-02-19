@@ -6,11 +6,11 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
 
+// Totals and vote storage
 let totalEffort = 0;
 let totalImpact = 0;
 let voteCount = 0;
-
-// Store all votes in an array, each with { userId, effort, impact }
+// Each element: { userId, effort, impact }
 let votes = [];
 
 app.use(express.static('public'));
@@ -18,68 +18,85 @@ app.use(express.static('public'));
 io.on('connection', (socket) => {
   console.log('New client connected');
 
-  // Send current averages, vote count, and all votes
-  socket.emit('update', {
-    averageEffort: voteCount ? totalEffort / voteCount : 0,
-    averageImpact: voteCount ? totalImpact / voteCount : 0,
-    voteCount,
-    allVotes: votes
-  });
-
-  // Handle new or updated votes
-  socket.on('newVote', (data) => {
-    const { userId, effort, impact } = data;
-
-    // Check if this user already voted
+  // The client tells us its userId as soon as it connects.
+  socket.on('register', ({ userId }) => {
     const existingVote = votes.find(v => v.userId === userId);
     if (existingVote) {
-      // Remove old values from totals
+      // If they voted before, add them to "voters" so they see the chart
+      socket.join('voters');
+      socket.emit('update', getCurrentData());
+    }
+    // Send the current vote count to everyone
+    socket.emit('voteCount', { voteCount });
+  });
+
+  // When a user votes or updates their vote
+  socket.on('newVote', ({ userId, effort, impact }) => {
+    const existingVote = votes.find(v => v.userId === userId);
+
+    if (existingVote) {
+      // Remove old values
       totalEffort -= existingVote.effort;
       totalImpact -= existingVote.impact;
-
       // Update the existing vote
       existingVote.effort = effort;
       existingVote.impact = impact;
-
-      // Add new values to totals
-      totalEffort += effort;
-      totalImpact += impact;
     } else {
-      // This is a brand new voter
+      // New voter
       votes.push({ userId, effort, impact });
-      totalEffort += effort;
-      totalImpact += impact;
       voteCount++;
     }
 
-    // Broadcast updated info to all
-    io.emit('update', {
-      averageEffort: totalEffort / voteCount,
-      averageImpact: totalImpact / voteCount,
-      voteCount,
-      allVotes: votes
-    });
+    // Add the new values
+    totalEffort += effort;
+    totalImpact += impact;
+
+    // Put this socket in the "voters" room so they see data
+    socket.join('voters');
+
+    // Broadcast updated chart data to "voters" only
+    io.to('voters').emit('update', getCurrentData());
+
+    // Broadcast the updated vote count to everyone
+    io.emit('voteCount', { voteCount });
   });
 
-  // Handle reset
+  // Reset everything
   socket.on('reset', () => {
     totalEffort = 0;
     totalImpact = 0;
     voteCount = 0;
     votes = [];
 
+    // Remove everyone from "voters"
+    io.in('voters').socketsLeave('voters');
+
+    // 1) Send empty data to ALL clients so their charts clear immediately
     io.emit('update', {
       averageEffort: 0,
       averageImpact: 0,
       voteCount: 0,
       allVotes: []
     });
+
+    // 2) Also send new (zero) vote count to everyone
+    io.emit('voteCount', { voteCount: 0 });
   });
 
   socket.on('disconnect', () => {
     console.log('Client disconnected');
   });
 });
+
+// Helper: current data payload
+function getCurrentData() {
+  return {
+    averageEffort: voteCount ? totalEffort / voteCount : 0,
+    averageImpact: voteCount ? totalImpact / voteCount : 0,
+    voteCount,
+    allVotes: votes
+  };
+}
 
 server.listen(3000, () => {
   console.log('Server listening on port 3000');
