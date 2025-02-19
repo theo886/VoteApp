@@ -89,33 +89,18 @@
     <canvas id="resultsChart"></canvas>
   </div>
 
-  <!-- Bottom Bar -->
+  <!-- Bottom Bar: moved settings icon to after vote count -->
   <div class="bottom-bar">
     <button id="resetVotes">Reset</button>
-    <!-- Removed copy-average button -->
-    <!-- <button id="copyVote">Copy Average</button> -->
-    <button id="openSettings" class="settings-btn">&#9881;</button>
     <span>Vote Count: <span id="voteCountDisplay">0/0</span></span>
+    <button id="openSettings" class="settings-btn">&#9881;</button>
   </div>
 
   <!-- Settings Overlay and Menu -->
   <div id="settingsOverlay"></div>
   <div id="settingsMenu">
     <h3>Settings</h3>
-    <!-- Placeholder settings -->
-    <label>
-      Enable Notifications:
-      <input type="checkbox" id="enableNotifications" />
-    </label>
-    <br /><br />
-    <label>
-      Default Vote Scale:
-      <select id="defaultVoteScale">
-        <option value="1-5">1-5</option>
-        <option value="1-10">1-10</option>
-      </select>
-    </label>
-    <br /><br />
+   
     <!-- New allow vote changes option -->
     <label>
       Allow Vote Changes:

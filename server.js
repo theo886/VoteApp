@@ -14,6 +14,9 @@ let voteCount = 0;
 let votes = [];
 let connectedUsers = 0;
 
+// Add global variable for allow vote changes
+let globalAllowVoteChanges = true;
+
 app.use(express.static('public'));
 
 io.on('connection', (socket) => {
@@ -34,12 +37,12 @@ io.on('connection', (socket) => {
   });
 
   // When a user votes or updates their vote
-  socket.on('newVote', ({ userId, effort, impact, allowVoteChanges }) => {
+  socket.on('newVote', ({ userId, effort, impact }) => {
     const existingVote = votes.find(v => v.userId === userId);
 
     if (existingVote) {
-      // if changes are not allowed, ignore updates
-      if (!allowVoteChanges) {
+      // Use global flag instead of client-passed allowVoteChanges.
+      if (!globalAllowVoteChanges) {
         return;
       }
       // Remove old values
@@ -66,6 +69,14 @@ io.on('connection', (socket) => {
 
     // Broadcast the updated vote count (as fraction) to everyone
     io.emit('voteCount', { voteCount, userCount: connectedUsers });
+  });
+
+  // Listen for setting updates and broadcast global change
+  socket.on('updateSetting', (payload) => {
+    if(payload.hasOwnProperty('allowVoteChanges')) {
+      globalAllowVoteChanges = payload.allowVoteChanges;
+    }
+    io.emit('settingUpdate', { allowVoteChanges: globalAllowVoteChanges });
   });
 
   // Reset everything
