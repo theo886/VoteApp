@@ -114,6 +114,15 @@
       <input type="checkbox" id="showIndividualVotes" checked />
     </label>
     <br /><br />
+    <!-- New vote scale option -->
+    <label>
+      Vote Scale:
+      <select id="voteScale">
+        <option value="1-5" selected>1-5</option>
+        <option value="0-10">0-10</option>
+      </select>
+    </label>
+    <br /><br />
     <button id="closeSettings">Close</button>
   </div>
 
@@ -131,10 +140,16 @@
     const allowVoteChangesInput = document.getElementById('allowVoteChanges');
     // New element for show individual votes
     const showIndividualVotesInput = document.getElementById('showIndividualVotes');
+    // New element for vote scale
+    const voteScaleSelect = document.getElementById('voteScale');
     
     // Global flags for settings
     let allowVoteChanges = allowVoteChangesInput.checked;
     let showIndividualVotes = showIndividualVotesInput.checked;
+    let voteScale = voteScaleSelect.value; // "1-5" by default
+    // Determine scale numbers based on voteScale
+    let ratingMin = voteScale === "1-5" ? 1 : 0;
+    let ratingMax = voteScale === "1-5" ? 5 : 10;
     
     // Update allowVoteChanges on change and emit updateSetting
     allowVoteChangesInput.addEventListener('change', (evt) => {
@@ -145,6 +160,19 @@
     showIndividualVotesInput.addEventListener('change', (evt) => {
       showIndividualVotes = evt.target.checked;
       socket.emit('updateSetting', { showIndividualVotes });
+    });
+    // Update vote scale on change and emit updateSetting
+    voteScaleSelect.addEventListener('change', (evt) => {
+      voteScale = evt.target.value;
+      socket.emit('updateSetting', { voteScale });
+      ratingMin = voteScale === "1-5" ? 1 : 0;
+      ratingMax = voteScale === "1-5" ? 5 : 10;
+      // Update existing chart scales
+      resultsChart.options.scales.x.min = ratingMin;
+      resultsChart.options.scales.x.max = ratingMax;
+      resultsChart.options.scales.y.min = ratingMin;
+      resultsChart.options.scales.y.max = ratingMax;
+      resultsChart.update();
     });
 
     // Generate or retrieve userId
@@ -322,12 +350,11 @@
       const userVote = data.allVotes.find(v => v.userId === userId);
       const otherVotes = data.allVotes.filter(v => v.userId !== userId);
 
-      // Other Votes
-      resultsChart.data.datasets[0].data = otherVotes.map(v => ({
-        x: v.effort,
-        y: v.impact
-      }));
-
+      // Other Votes: remove from the chart if disabled
+      resultsChart.data.datasets[0].data = showIndividualVotes
+        ? otherVotes.map(v => ({ x: v.effort, y: v.impact }))
+        : [];
+      
       // Your Vote
       if (userVote) {
         resultsChart.data.datasets[1].data = [{
@@ -337,13 +364,13 @@
       } else {
         resultsChart.data.datasets[1].data = [];
       }
-
+      
       // Average
       resultsChart.data.datasets[2].data = [{
         x: data.averageEffort,
         y: data.averageImpact
       }];
-
+      
       resultsChart.update();
     });
 
@@ -351,11 +378,21 @@
     socket.on('settingUpdate', (data) => {
       allowVoteChanges = data.allowVoteChanges;
       showIndividualVotes = data.showIndividualVotes;
+      voteScale = data.voteScale;
       allowVoteChangesInput.checked = data.allowVoteChanges;
       showIndividualVotesInput.checked = data.showIndividualVotes;
-      // Toggle individual votes dataset visibility:
-      // Assuming dataset 0 holds individual (other) votes.
-      resultsChart.data.datasets[0].hidden = !showIndividualVotes;
+      voteScaleSelect.value = voteScale;
+      // Update chart scale based on voteScale
+      ratingMin = voteScale === "1-5" ? 1 : 0;
+      ratingMax = voteScale === "1-5" ? 5 : 10;
+      resultsChart.options.scales.x.min = ratingMin;
+      resultsChart.options.scales.x.max = ratingMax;
+      resultsChart.options.scales.y.min = ratingMin;
+      resultsChart.options.scales.y.max = ratingMax;
+      // For individual votes, remove data altogether if disabled
+      if (!showIndividualVotes) {
+          resultsChart.data.datasets[0].data = [];
+      }
       resultsChart.update();
     });
   </script>
