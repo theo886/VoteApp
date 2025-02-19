@@ -12,11 +12,13 @@ let totalImpact = 0;
 let voteCount = 0;
 // Each element: { userId, effort, impact }
 let votes = [];
+let connectedUsers = 0;
 
 app.use(express.static('public'));
 
 io.on('connection', (socket) => {
-  console.log('New client connected');
+  connectedUsers++;
+  console.log('New client connected. Total connected:', connectedUsers);
 
   // The client tells us its userId as soon as it connects.
   socket.on('register', ({ userId }) => {
@@ -26,8 +28,9 @@ io.on('connection', (socket) => {
       socket.join('voters');
       socket.emit('update', getCurrentData());
     }
-    // Send the current vote count to everyone
-    socket.emit('voteCount', { voteCount });
+    // Send the current vote count (as fraction) to everyone
+    socket.emit('voteCount', { voteCount, userCount: connectedUsers });
+    io.emit('voteCount', { voteCount, userCount: connectedUsers });
   });
 
   // When a user votes or updates their vote
@@ -57,8 +60,8 @@ io.on('connection', (socket) => {
     // Broadcast updated chart data to "voters" only
     io.to('voters').emit('update', getCurrentData());
 
-    // Broadcast the updated vote count to everyone
-    io.emit('voteCount', { voteCount });
+    // Broadcast the updated vote count (as fraction) to everyone
+    io.emit('voteCount', { voteCount, userCount: connectedUsers });
   });
 
   // Reset everything
@@ -80,11 +83,14 @@ io.on('connection', (socket) => {
     });
 
     // 2) Also send new (zero) vote count to everyone
-    io.emit('voteCount', { voteCount: 0 });
+    io.emit('voteCount', { voteCount: 0, userCount: connectedUsers });
   });
 
   socket.on('disconnect', () => {
-    console.log('Client disconnected');
+    connectedUsers--;
+    console.log('Client disconnected. Total connected:', connectedUsers);
+    // Update vote count fraction for remaining users
+    io.emit('voteCount', { voteCount, userCount: connectedUsers });
   });
 });
 
