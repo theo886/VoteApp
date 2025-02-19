@@ -122,43 +122,29 @@
       <input type="checkbox" id="allowVoteChanges" checked />
     </label>
     <br /><br />
-    <!-- Remove vote scale option -->
-    <!--
-    <label>
-      Vote Scale:
-      <select id="voteScale">
-        <option value="1-5" selected>1-5</option>
-        <option value="0-10">0-10</option>
-      </select>
-    </label>
-    <br /><br />
-    -->
+    <!-- Removed show individual votes option -->
     <button id="closeSettings">Close</button>
   </div>
 
   <script>
     const socket = io();
     const resetButton = document.getElementById('resetVotes');
-    // Removed copy-average button element and its code
-    // const copyButton = document.getElementById('copyVote');
     const voteCountDisplay = document.getElementById('voteCountDisplay');
-    // New settings elements
+    // Settings elements
     const openSettings = document.getElementById('openSettings');
     const closeSettings = document.getElementById('closeSettings');
     const settingsMenu = document.getElementById('settingsMenu');
     const settingsOverlay = document.getElementById('settingsOverlay');
     const allowVoteChangesInput = document.getElementById('allowVoteChanges');
     
-    // Global flags for settings
+    // Global flag for allow vote changes only; always show individual votes.
     let allowVoteChanges = allowVoteChangesInput.checked;
-    let showIndividualVotes = showIndividualVotesInput.checked;
     
-    // Update allowVoteChanges on change and emit updateSetting
+    // Update allowVoteChanges on change
     allowVoteChangesInput.addEventListener('change', (evt) => {
       allowVoteChanges = evt.target.checked;
+      socket.emit('updateSetting', { allowVoteChanges });
     });
-    // Remove voteScaleSelect event listener
-    // voteScaleSelect.addEventListener('change', ...);
     
     // Generate or retrieve userId
     let userId = localStorage.getItem('userId');
@@ -166,14 +152,14 @@
       userId = Math.random().toString(36).substr(2, 9);
       localStorage.setItem('userId', userId);
     }
-
+    
     // Register with the server
     socket.emit('register', { userId });
-
-    // Always use 1-5 scale
+    
+    // Fixed scale: 1–5
     const ratingMin = 1;
     const ratingMax = 5;
-
+    
     // Create the Chart.js scatter chart
     const ctx = document.getElementById('resultsChart').getContext('2d');
     const resultsChart = new Chart(ctx, {
@@ -255,10 +241,9 @@
         }
       }
     });
-
-    // Updated click event: if vote changes not allowed and user has voted, ignore
+    
+    // Chart click event remains unchanged
     resultsChart.canvas.addEventListener('click', (evt) => {
-      // Check if vote changes are allowed or if user hasn't voted yet
       if (!allowVoteChanges && resultsChart.data.datasets[1].data.length > 0) {
         console.log("Vote changes are disabled.");
         return;
@@ -269,29 +254,24 @@
       const yValue = yScale.getValueForPixel(evt.offsetY);
       const effort = Math.round(Math.min(Math.max(xValue, ratingMin), ratingMax));
       const impact = Math.round(Math.min(Math.max(yValue, ratingMin), ratingMax));
-      // Send the allowVoteChanges flag along with the vote
       socket.emit('newVote', { userId, effort, impact, allowVoteChanges });
     });
-
-    // Reset button with copy feature
+    
+    // Reset button event remains unchanged
     resetButton.addEventListener('click', () => {
       socket.emit('reset');
       const avgVote = resultsChart.data.datasets[2].data[0];
       if (avgVote) {
-      const textToCopy = `${avgVote.x}\t${avgVote.y}`;
-      navigator.clipboard.writeText(textToCopy)
-        .then(() => {
-        console.log('Average vote copied to clipboard!');
-        })
-        .catch((err) => {
-        console.error('Failed to copy average vote: ', err);
-        });
+        const textToCopy = `${avgVote.x}\t${avgVote.y}`;
+        navigator.clipboard.writeText(textToCopy)
+          .then(() => console.log('Average vote copied to clipboard!'))
+          .catch((err) => console.error('Failed to copy average vote: ', err));
       } else {
-      console.log('No average vote to copy.');
+        console.log('No average vote to copy.');
       }
     });
-
-    // Settings toggle functions
+    
+    // Settings toggle functions remain unchanged
     function openSettingsMenu() {
       settingsOverlay.style.display = 'block';
       settingsMenu.style.display = 'block';
@@ -303,50 +283,34 @@
     openSettings.addEventListener('click', openSettingsMenu);
     closeSettings.addEventListener('click', closeSettingsMenu);
     settingsOverlay.addEventListener('click', closeSettingsMenu);
-
+    
     // Listen for vote count updates
     socket.on('voteCount', (data) => {
       voteCountDisplay.textContent = `${data.voteCount}/${data.userCount}`;
     });
-
-    // Listen for chart data updates
+    
+    // Listen for chart data updates and map votes normally
     socket.on('update', (data) => {
       const userVote = data.allVotes.find(v => v.userId === userId);
       const otherVotes = data.allVotes.filter(v => v.userId !== userId);
-
-      // Other Votes: remove from the chart if disabled
-      resultsChart.data.datasets[0].data = showIndividualVotes
-        ? otherVotes.map(v => ({ x: v.effort, y: v.impact }))
-        : [];
       
-      // Your Vote
+      resultsChart.data.datasets[0].data = otherVotes.map(v => ({ x: v.effort, y: v.impact }));
+      
       if (userVote) {
-        resultsChart.data.datasets[1].data = [{
-          x: userVote.effort,
-          y: userVote.impact
-        }];
+        resultsChart.data.datasets[1].data = [{ x: userVote.effort, y: userVote.impact }];
       } else {
         resultsChart.data.datasets[1].data = [];
       }
       
-      // Average
-      resultsChart.data.datasets[2].data = [{
-        x: data.averageEffort,
-        y: data.averageImpact
-      }];
+      resultsChart.data.datasets[2].data = [{ x: data.averageEffort, y: data.averageImpact }];
       
       resultsChart.update();
     });
-
-    // Listen for global setting updates and update local UI accordingly
+    
+    // Listen for global setting updates and update allowVoteChanges only
     socket.on('settingUpdate', (data) => {
       allowVoteChanges = data.allowVoteChanges;
-      showIndividualVotes = data.showIndividualVotes;
       allowVoteChangesInput.checked = data.allowVoteChanges;
-      showIndividualVotesInput.checked = data.showIndividualVotes;
-      // Toggle individual votes dataset visibility:
-      // Assuming dataset 0 holds individual (other) votes.
-      resultsChart.data.datasets[0].hidden = !showIndividualVotes;
       resultsChart.update();
     });
   </script>
