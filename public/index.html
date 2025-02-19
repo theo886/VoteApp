@@ -50,6 +50,37 @@
       padding: 0.5rem 1rem;
       font-size: 1rem;
     }
+
+    #settingsMenu {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: #fff;
+      padding: 20px;
+      border: 1px solid #ccc;
+      z-index: 1001;
+      width: 90%;
+      max-width: 300px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.5);
+    }
+    #settingsOverlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+    }
+    .settings-btn {
+      background: none;
+      border: none;
+      font-size: 1.5rem;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -62,7 +93,30 @@
   <div class="bottom-bar">
     <button id="resetVotes">Reset</button>
     <button id="copyVote">Copy Average</button>
+    <!-- New Settings button -->
+    <button id="openSettings" class="settings-btn">&#9881;</button>
     <span>Vote Count: <span id="voteCountDisplay">0/0</span></span>
+  </div>
+
+  <!-- Settings Overlay and Menu -->
+  <div id="settingsOverlay"></div>
+  <div id="settingsMenu">
+    <h3>Settings</h3>
+    <!-- Placeholder settings -->
+    <label>
+      Enable Notifications:
+      <input type="checkbox" id="enableNotifications" />
+    </label>
+    <br /><br />
+    <label>
+      Default Vote Scale:
+      <select id="defaultVoteScale">
+        <option value="1-5">1-5</option>
+        <option value="1-10">1-10</option>
+      </select>
+    </label>
+    <br /><br />
+    <button id="closeSettings">Close</button>
   </div>
 
   <script>
@@ -70,6 +124,11 @@
     const resetButton = document.getElementById('resetVotes');
     const copyButton = document.getElementById('copyVote');
     const voteCountDisplay = document.getElementById('voteCountDisplay');
+    // New settings elements
+    const openSettings = document.getElementById('openSettings');
+    const closeSettings = document.getElementById('closeSettings');
+    const settingsMenu = document.getElementById('settingsMenu');
+    const settingsOverlay = document.getElementById('settingsOverlay');
 
     // Generate or retrieve userId
     let userId = localStorage.getItem('userId');
@@ -202,6 +261,19 @@
         console.log('No average vote to copy.');
       }
     });
+
+    // Settings toggle functions
+    function openSettingsMenu() {
+      settingsOverlay.style.display = 'block';
+      settingsMenu.style.display = 'block';
+    }
+    function closeSettingsMenu() {
+      settingsOverlay.style.display = 'none';
+      settingsMenu.style.display = 'none';
+    }
+    openSettings.addEventListener('click', openSettingsMenu);
+    closeSettings.addEventListener('click', closeSettingsMenu);
+    settingsOverlay.addEventListener('click', closeSettingsMenu);
 
     // Listen for vote count updates
     socket.on('voteCount', (data) => {
