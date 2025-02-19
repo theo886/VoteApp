@@ -16,20 +16,24 @@
       flex-direction: column;
       align-items: center;
     }
-    /* Chart container now has a fixed height to ensure the canvas is visible */
+
+    /* Chart container styling */
     .chart-container {
       width: 100%;
       max-width: 600px;
-      height: 60vh;
+      aspect-ratio: 1 / 1;
+      max-height: 60vh;
       position: relative;
       padding: 1rem;
       box-sizing: border-box;
     }
+
     #resultsChart {
       width: 100%;
       height: 100%;
       cursor: crosshair;
     }
+
     /* Bottom bar styling */
     .bottom-bar {
       width: 100%;
@@ -41,10 +45,12 @@
       gap: 1rem;
       padding: 1rem;
     }
+
     button {
       padding: 0.5rem 1rem;
       font-size: 1rem;
     }
+
     .toggle-container {
       display: flex;
       align-items: center;
@@ -61,10 +67,10 @@
   <!-- Bottom Bar -->
   <div class="bottom-bar">
     <button id="resetVotes">Reset</button>
-    <button id="copyVote">Copy Average</button>
+    <button id="copyVote">Copy Vote</button>
     <span>Vote Count: <span id="voteCountDisplay">0/0</span></span>
     <div class="toggle-container">
-      <label for="toggleScale">Use 0-10 Scale</label>
+      <label for="toggleScale">Use 1-10 Scale</label>
       <input type="checkbox" id="toggleScale">
     </div>
   </div>
@@ -86,8 +92,7 @@
     // Register with the server
     socket.emit('register', { userId });
 
-    // Default rating scale settings: 1-5
-    let ratingMin = 1;
+    // Initial rating scale maximum (default 5)
     let ratingMax = 5;
 
     // Create the Chart.js scatter chart
@@ -114,8 +119,7 @@
           },
           {
             label: 'Average',
-            // Default to center of current scale so it’s visible
-            data: [{ x: (ratingMin + ratingMax) / 2, y: (ratingMin + ratingMax) / 2 }],
+            data: [{ x: 0, y: 0 }],
             backgroundColor: 'rgba(75, 192, 192, 0.6)',
             borderColor: 'rgba(75, 192, 192, 1)',
             pointRadius: 6,
@@ -130,6 +134,7 @@
           legend: {
             position: 'bottom',
             labels: {
+              // Use point style (circles) in the legend
               usePointStyle: true
             }
           }
@@ -137,11 +142,11 @@
         scales: {
           x: {
             type: 'linear',
-            min: ratingMin,
+            min: 1,
             max: ratingMax,
             grid: {
               color: function(context) {
-                const mid = Math.round((ratingMin + ratingMax) / 2);
+                const mid = Math.round((1 + ratingMax) / 2);
                 return context.tick.value === mid ? '#000' : '#ccc';
               }
             },
@@ -149,16 +154,16 @@
             title: {
               display: true,
               text: 'Effort',
-              font: { size: 24 }
+              font: { size: 24 } // 2x bigger font
             }
           },
           y: {
             type: 'linear',
-            min: ratingMin,
+            min: 1,
             max: ratingMax,
             grid: {
               color: function(context) {
-                const mid = Math.round((ratingMin + ratingMax) / 2);
+                const mid = Math.round((1 + ratingMax) / 2);
                 return context.tick.value === mid ? '#000' : '#ccc';
               }
             },
@@ -166,59 +171,49 @@
             title: {
               display: true,
               text: 'Impact',
-              font: { size: 24 }
+              font: { size: 24 } // 2x bigger font
             }
           }
         }
       }
     });
 
-    // Toggle scale change between 1-5 and 0-10
+    // Toggle scale change between 1-5 and 1-10
     toggleScaleCheckbox.addEventListener('change', () => {
-      if (toggleScaleCheckbox.checked) {
-        ratingMin = 0;
-        ratingMax = 10;
-      } else {
-        ratingMin = 1;
-        ratingMax = 5;
-      }
-      updateScaleConfig(ratingMin, ratingMax);
+      ratingMax = toggleScaleCheckbox.checked ? 10 : 5;
+      updateScaleConfig(ratingMax);
     });
 
-    function updateScaleConfig(minVal, maxVal) {
-      const mid = Math.round((minVal + maxVal) / 2);
-      resultsChart.options.scales.x.min = minVal;
-      resultsChart.options.scales.x.max = maxVal;
+    function updateScaleConfig(newMax) {
+      const mid = Math.round((1 + newMax) / 2);
+      resultsChart.options.scales.x.min = 1;
+      resultsChart.options.scales.x.max = newMax;
       resultsChart.options.scales.x.grid.color = function(context) {
         return context.tick.value === mid ? '#000' : '#ccc';
       };
       resultsChart.options.scales.x.ticks.stepSize = 1;
       
-      resultsChart.options.scales.y.min = minVal;
-      resultsChart.options.scales.y.max = maxVal;
+      resultsChart.options.scales.y.min = 1;
+      resultsChart.options.scales.y.max = newMax;
       resultsChart.options.scales.y.grid.color = function(context) {
         return context.tick.value === mid ? '#000' : '#ccc';
       };
       resultsChart.options.scales.y.ticks.stepSize = 1;
       
-      // If no votes, recenter the average dataset
-      if (!resultsChart.data.datasets[2].data.length ||
-          resultsChart.data.datasets[2].data[0].x < minVal ||
-          resultsChart.data.datasets[2].data[0].x > maxVal) {
-        resultsChart.data.datasets[2].data = [{ x: (minVal + maxVal) / 2, y: (minVal + maxVal) / 2 }];
-      }
-      
       resultsChart.update();
     }
 
-    // Click to vote using current rating range
+    // Click to vote using current ratingMax
     resultsChart.canvas.addEventListener('click', (evt) => {
       const xScale = resultsChart.scales.x;
       const yScale = resultsChart.scales.y;
+
       const xValue = xScale.getValueForPixel(evt.offsetX);
       const yValue = yScale.getValueForPixel(evt.offsetY);
-      const effort = Math.round(Math.min(Math.max(xValue, ratingMin), ratingMax));
-      const impact = Math.round(Math.min(Math.max(yValue, ratingMin), ratingMax));
+
+      const effort = Math.round(Math.min(Math.max(xValue, 1), ratingMax));
+      const impact = Math.round(Math.min(Math.max(yValue, 1), ratingMax));
+
       socket.emit('newVote', { userId, effort, impact });
     });
 
@@ -227,17 +222,20 @@
       socket.emit('reset');
     });
 
-    // Copy Vote Button: copies the average value as a tab-delimited string
+    // Copy Vote Button: copies a 2-column, 1-row HTML table with your effort and impact values
     copyButton.addEventListener('click', () => {
-      const avgVote = resultsChart.data.datasets[2].data[0];
-      if (avgVote) {
-        // Format as "effort[TAB]impact" so that Excel places them in adjacent cells
-        const textToCopy = `${avgVote.x}\t${avgVote.y}`;
-        navigator.clipboard.writeText(textToCopy)
-          .then(() => console.log('Average vote copied to clipboard!'))
-          .catch((err) => console.error('Failed to copy average vote: ', err));
+      const userVote = resultsChart.data.datasets[1].data[0];
+      if(userVote) {
+        const tableHTML = `<table><tr><td>${userVote.x}</td><td>${userVote.y}</td></tr></table>`;
+        navigator.clipboard.writeText(tableHTML)
+          .then(() => {
+            console.log('Vote table copied to clipboard!');
+          })
+          .catch((err) => {
+            console.error('Failed to copy vote table: ', err);
+          });
       } else {
-        console.log('No average vote to copy.');
+        console.log('No vote to copy.');
       }
     });
 
@@ -246,4 +244,35 @@
       voteCountDisplay.textContent = `${data.voteCount}/${data.userCount}`;
     });
 
-    // Listen for chart data updates from
+    // Listen for chart data updates
+    socket.on('update', (data) => {
+      const userVote = data.allVotes.find(v => v.userId === userId);
+      const otherVotes = data.allVotes.filter(v => v.userId !== userId);
+
+      // Other Votes
+      resultsChart.data.datasets[0].data = otherVotes.map(v => ({
+        x: v.effort,
+        y: v.impact
+      }));
+
+      // Your Vote
+      if (userVote) {
+        resultsChart.data.datasets[1].data = [{
+          x: userVote.effort,
+          y: userVote.impact
+        }];
+      } else {
+        resultsChart.data.datasets[1].data = [];
+      }
+
+      // Average
+      resultsChart.data.datasets[2].data = [{
+        x: data.averageEffort,
+        y: data.averageImpact
+      }];
+
+      resultsChart.update();
+    });
+  </script>
+</body>
+</html>
