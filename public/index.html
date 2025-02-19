@@ -16,12 +16,11 @@
       flex-direction: column;
       align-items: center;
     }
-    /* Chart container styling */
+    /* Chart container now has a fixed height to ensure the canvas is visible */
     .chart-container {
       width: 100%;
       max-width: 600px;
-      aspect-ratio: 1 / 1;
-      max-height: 60vh;
+      height: 60vh;
       position: relative;
       padding: 1rem;
       box-sizing: border-box;
@@ -131,7 +130,6 @@
           legend: {
             position: 'bottom',
             labels: {
-              // Use circle point style in the legend
               usePointStyle: true
             }
           }
@@ -190,4 +188,62 @@
     function updateScaleConfig(minVal, maxVal) {
       const mid = Math.round((minVal + maxVal) / 2);
       resultsChart.options.scales.x.min = minVal;
-      resultsChart.options.scales.x.max =
+      resultsChart.options.scales.x.max = maxVal;
+      resultsChart.options.scales.x.grid.color = function(context) {
+        return context.tick.value === mid ? '#000' : '#ccc';
+      };
+      resultsChart.options.scales.x.ticks.stepSize = 1;
+      
+      resultsChart.options.scales.y.min = minVal;
+      resultsChart.options.scales.y.max = maxVal;
+      resultsChart.options.scales.y.grid.color = function(context) {
+        return context.tick.value === mid ? '#000' : '#ccc';
+      };
+      resultsChart.options.scales.y.ticks.stepSize = 1;
+      
+      // If no votes, recenter the average dataset
+      if (!resultsChart.data.datasets[2].data.length ||
+          resultsChart.data.datasets[2].data[0].x < minVal ||
+          resultsChart.data.datasets[2].data[0].x > maxVal) {
+        resultsChart.data.datasets[2].data = [{ x: (minVal + maxVal) / 2, y: (minVal + maxVal) / 2 }];
+      }
+      
+      resultsChart.update();
+    }
+
+    // Click to vote using current rating range
+    resultsChart.canvas.addEventListener('click', (evt) => {
+      const xScale = resultsChart.scales.x;
+      const yScale = resultsChart.scales.y;
+      const xValue = xScale.getValueForPixel(evt.offsetX);
+      const yValue = yScale.getValueForPixel(evt.offsetY);
+      const effort = Math.round(Math.min(Math.max(xValue, ratingMin), ratingMax));
+      const impact = Math.round(Math.min(Math.max(yValue, ratingMin), ratingMax));
+      socket.emit('newVote', { userId, effort, impact });
+    });
+
+    // Reset button
+    resetButton.addEventListener('click', () => {
+      socket.emit('reset');
+    });
+
+    // Copy Vote Button: copies the average value as a tab-delimited string
+    copyButton.addEventListener('click', () => {
+      const avgVote = resultsChart.data.datasets[2].data[0];
+      if (avgVote) {
+        // Format as "effort[TAB]impact" so that Excel places them in adjacent cells
+        const textToCopy = `${avgVote.x}\t${avgVote.y}`;
+        navigator.clipboard.writeText(textToCopy)
+          .then(() => console.log('Average vote copied to clipboard!'))
+          .catch((err) => console.error('Failed to copy average vote: ', err));
+      } else {
+        console.log('No average vote to copy.');
+      }
+    });
+
+    // Listen for vote count updates
+    socket.on('voteCount', (data) => {
+      voteCountDisplay.textContent = `${data.voteCount}/${data.userCount}`;
+    });
+
+    // Listen for chart data updates from
