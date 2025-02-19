@@ -70,7 +70,7 @@
     <button id="copyVote">Copy Vote</button>
     <span>Vote Count: <span id="voteCountDisplay">0/0</span></span>
     <div class="toggle-container">
-      <label for="toggleScale">Use 1-10 Scale</label>
+      <label for="toggleScale">Use 0-10 Scale</label>
       <input type="checkbox" id="toggleScale">
     </div>
   </div>
@@ -92,7 +92,8 @@
     // Register with the server
     socket.emit('register', { userId });
 
-    // Initial rating scale maximum (default 5)
+    // Default rating scale settings: 1-5 scale
+    let ratingMin = 1;
     let ratingMax = 5;
 
     // Create the Chart.js scatter chart
@@ -142,11 +143,11 @@
         scales: {
           x: {
             type: 'linear',
-            min: 1,
+            min: ratingMin,
             max: ratingMax,
             grid: {
               color: function(context) {
-                const mid = Math.round((1 + ratingMax) / 2);
+                const mid = Math.round((ratingMin + ratingMax) / 2);
                 return context.tick.value === mid ? '#000' : '#ccc';
               }
             },
@@ -159,11 +160,11 @@
           },
           y: {
             type: 'linear',
-            min: 1,
+            min: ratingMin,
             max: ratingMax,
             grid: {
               color: function(context) {
-                const mid = Math.round((1 + ratingMax) / 2);
+                const mid = Math.round((ratingMin + ratingMax) / 2);
                 return context.tick.value === mid ? '#000' : '#ccc';
               }
             },
@@ -178,23 +179,29 @@
       }
     });
 
-    // Toggle scale change between 1-5 and 1-10
+    // Toggle scale change between 1-5 and 0-10
     toggleScaleCheckbox.addEventListener('change', () => {
-      ratingMax = toggleScaleCheckbox.checked ? 10 : 5;
-      updateScaleConfig(ratingMax);
+      if (toggleScaleCheckbox.checked) {
+        ratingMin = 0;
+        ratingMax = 10;
+      } else {
+        ratingMin = 1;
+        ratingMax = 5;
+      }
+      updateScaleConfig(ratingMin, ratingMax);
     });
 
-    function updateScaleConfig(newMax) {
-      const mid = Math.round((1 + newMax) / 2);
-      resultsChart.options.scales.x.min = 1;
-      resultsChart.options.scales.x.max = newMax;
+    function updateScaleConfig(minVal, maxVal) {
+      const mid = Math.round((minVal + maxVal) / 2);
+      resultsChart.options.scales.x.min = minVal;
+      resultsChart.options.scales.x.max = maxVal;
       resultsChart.options.scales.x.grid.color = function(context) {
         return context.tick.value === mid ? '#000' : '#ccc';
       };
       resultsChart.options.scales.x.ticks.stepSize = 1;
       
-      resultsChart.options.scales.y.min = 1;
-      resultsChart.options.scales.y.max = newMax;
+      resultsChart.options.scales.y.min = minVal;
+      resultsChart.options.scales.y.max = maxVal;
       resultsChart.options.scales.y.grid.color = function(context) {
         return context.tick.value === mid ? '#000' : '#ccc';
       };
@@ -203,7 +210,7 @@
       resultsChart.update();
     }
 
-    // Click to vote using current ratingMax
+    // Click to vote using current rating range
     resultsChart.canvas.addEventListener('click', (evt) => {
       const xScale = resultsChart.scales.x;
       const yScale = resultsChart.scales.y;
@@ -211,8 +218,8 @@
       const xValue = xScale.getValueForPixel(evt.offsetX);
       const yValue = yScale.getValueForPixel(evt.offsetY);
 
-      const effort = Math.round(Math.min(Math.max(xValue, 1), ratingMax));
-      const impact = Math.round(Math.min(Math.max(yValue, 1), ratingMax));
+      const effort = Math.round(Math.min(Math.max(xValue, ratingMin), ratingMax));
+      const impact = Math.round(Math.min(Math.max(yValue, ratingMin), ratingMax));
 
       socket.emit('newVote', { userId, effort, impact });
     });
