@@ -24,14 +24,14 @@
       aspect-ratio: 1 / 1;
       max-height: 60vh;
       position: relative;
-      padding: 1rem;           /* Padding around the chart */
-      box-sizing: border-box;  /* Ensures padding doesn't overflow container */
+      padding: 1rem;
+      box-sizing: border-box;
     }
 
     #resultsChart {
       width: 100%;
       height: 100%;
-      cursor: crosshair; /* Indicates you can click to vote */
+      cursor: crosshair;
     }
 
     /* Center the Reset button & vote count */
@@ -39,9 +39,9 @@
       width: 100%;
       max-width: 600px;
       display: flex;
-      justify-content: center; /* Center horizontally */
+      justify-content: center;
       align-items: center;
-      gap: 2rem;               /* Space between button & count */
+      gap: 2rem;
       padding: 1rem;
     }
 
@@ -60,7 +60,7 @@
   <!-- Bottom bar with Reset and vote count -->
   <div class="bottom-bar">
     <button id="resetVotes">Reset</button>
-    <span>Vote Count: <span id="voteCountDisplay">0</span></span>
+    <span>Vote Count: <span id="voteCountDisplay">0/0</span></span>
   </div>
 
   <script>
@@ -121,41 +121,43 @@
         scales: {
           x: {
             type: 'linear',
-            min: 0,
-            max: 10,
+            min: 1,
+            max: 5,
             grid: {
               color: (context) => {
-                // Make line at x=5 bolder
-                return context.tick.value === 5 ? '#000' : '#ccc';
+                // Bold grid line at 3 (center)
+                return context.tick.value === 3 ? '#000' : '#ccc';
               }
             },
             ticks: { stepSize: 1 },
             title: {
               display: true,
-              text: 'Effort'
+              text: 'Effort',
+              font: { size: 24 } // Axis label 2x bigger
             }
           },
           y: {
             type: 'linear',
-            min: 0,
-            max: 10,
+            min: 1,
+            max: 5,
             grid: {
               color: (context) => {
-                // Make line at y=5 bolder
-                return context.tick.value === 5 ? '#000' : '#ccc';
+                // Bold grid line at 3 (center)
+                return context.tick.value === 3 ? '#000' : '#ccc';
               }
             },
             ticks: { stepSize: 1 },
             title: {
               display: true,
-              text: 'Impact'
+              text: 'Impact',
+              font: { size: 24 } // Axis label 2x bigger
             }
           }
         }
       }
     });
 
-    // Click to vote
+    // Click to vote (ratings clamped between 1 and 5)
     resultsChart.canvas.addEventListener('click', (evt) => {
       const xScale = resultsChart.scales.x;
       const yScale = resultsChart.scales.y;
@@ -163,8 +165,8 @@
       const xValue = xScale.getValueForPixel(evt.offsetX);
       const yValue = yScale.getValueForPixel(evt.offsetY);
 
-      const effort = Math.round(Math.min(Math.max(xValue, 0), 10));
-      const impact = Math.round(Math.min(Math.max(yValue, 0), 10));
+      const effort = Math.round(Math.min(Math.max(xValue, 1), 5));
+      const impact = Math.round(Math.min(Math.max(yValue, 1), 5));
 
       socket.emit('newVote', { userId, effort, impact });
     });
@@ -174,9 +176,9 @@
       socket.emit('reset');
     });
 
-    // Always get updated vote count
+    // Update vote count as a fraction (votes/users)
     socket.on('voteCount', (data) => {
-      voteCountDisplay.textContent = data.voteCount;
+      voteCountDisplay.textContent = `${data.voteCount}/${data.userCount}`;
     });
 
     // Only get 'update' if we're in the "voters" room
