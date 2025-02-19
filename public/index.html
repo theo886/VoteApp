@@ -50,12 +50,6 @@
       padding: 0.5rem 1rem;
       font-size: 1rem;
     }
-
-    .toggle-container {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
   </style>
 </head>
 <body>
@@ -67,12 +61,8 @@
   <!-- Bottom Bar -->
   <div class="bottom-bar">
     <button id="resetVotes">Reset</button>
-    <button id="copyVote">Copy Vote</button>
+    <button id="copyVote">Copy Average</button>
     <span>Vote Count: <span id="voteCountDisplay">0/0</span></span>
-    <div class="toggle-container">
-      <label for="toggleScale">Use 0-10 Scale</label>
-      <input type="checkbox" id="toggleScale">
-    </div>
   </div>
 
   <script>
@@ -80,7 +70,6 @@
     const resetButton = document.getElementById('resetVotes');
     const copyButton = document.getElementById('copyVote');
     const voteCountDisplay = document.getElementById('voteCountDisplay');
-    const toggleScaleCheckbox = document.getElementById('toggleScale');
 
     // Generate or retrieve userId
     let userId = localStorage.getItem('userId');
@@ -92,9 +81,9 @@
     // Register with the server
     socket.emit('register', { userId });
 
-    // Default rating scale settings: 1-5 scale
-    let ratingMin = 1;
-    let ratingMax = 5;
+    // Always use 1-5 scale
+    const ratingMin = 1;
+    const ratingMax = 5;
 
     // Create the Chart.js scatter chart
     const ctx = document.getElementById('resultsChart').getContext('2d');
@@ -135,7 +124,6 @@
           legend: {
             position: 'bottom',
             labels: {
-              // Use point style (circles) in the legend
               usePointStyle: true
             }
           }
@@ -155,7 +143,7 @@
             title: {
               display: true,
               text: 'Effort',
-              font: { size: 24 } // 2x bigger font
+              font: { size: 24 }
             }
           },
           y: {
@@ -172,43 +160,12 @@
             title: {
               display: true,
               text: 'Impact',
-              font: { size: 24 } // 2x bigger font
+              font: { size: 24 }
             }
           }
         }
       }
     });
-
-    // Toggle scale change between 1-5 and 0-10
-    toggleScaleCheckbox.addEventListener('change', () => {
-      if (toggleScaleCheckbox.checked) {
-        ratingMin = 0;
-        ratingMax = 10;
-      } else {
-        ratingMin = 1;
-        ratingMax = 5;
-      }
-      updateScaleConfig(ratingMin, ratingMax);
-    });
-
-    function updateScaleConfig(minVal, maxVal) {
-      const mid = Math.round((minVal + maxVal) / 2);
-      resultsChart.options.scales.x.min = minVal;
-      resultsChart.options.scales.x.max = maxVal;
-      resultsChart.options.scales.x.grid.color = function(context) {
-        return context.tick.value === mid ? '#000' : '#ccc';
-      };
-      resultsChart.options.scales.x.ticks.stepSize = 1;
-      
-      resultsChart.options.scales.y.min = minVal;
-      resultsChart.options.scales.y.max = maxVal;
-      resultsChart.options.scales.y.grid.color = function(context) {
-        return context.tick.value === mid ? '#000' : '#ccc';
-      };
-      resultsChart.options.scales.y.ticks.stepSize = 1;
-      
-      resultsChart.update();
-    }
 
     // Click to vote using current rating range
     resultsChart.canvas.addEventListener('click', (evt) => {
@@ -229,20 +186,20 @@
       socket.emit('reset');
     });
 
-    // Copy Vote Button: copies a 2-column, 1-row HTML table with your effort and impact values
+    // Copy Average Button: copies a tab-delimited string (e.g., "3	3")
     copyButton.addEventListener('click', () => {
-      const userVote = resultsChart.data.datasets[1].data[0];
-      if(userVote) {
-        const tableHTML = `<table><tr><td>${userVote.x}</td><td>${userVote.y}</td></tr></table>`;
-        navigator.clipboard.writeText(tableHTML)
+      const avgVote = resultsChart.data.datasets[2].data[0];
+      if (avgVote) {
+        const textToCopy = `${avgVote.x}\t${avgVote.y}`;
+        navigator.clipboard.writeText(textToCopy)
           .then(() => {
-            console.log('Vote table copied to clipboard!');
+            console.log('Average vote copied to clipboard!');
           })
           .catch((err) => {
-            console.error('Failed to copy vote table: ', err);
+            console.error('Failed to copy average vote: ', err);
           });
       } else {
-        console.log('No vote to copy.');
+        console.log('No average vote to copy.');
       }
     });
 
