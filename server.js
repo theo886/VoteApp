@@ -16,8 +16,6 @@ let connectedUsers = 0;
 // Add global flag for vote changes and for showing individual votes
 let globalAllowVoteChanges = true;
 let globalShowIndividualVotes = true;
-// Add global flag for vote scale
-let globalVoteScale = "1-5";
 
 app.use(express.static('public'));
 
@@ -81,13 +79,9 @@ io.on('connection', (socket) => {
     if (payload.hasOwnProperty('showIndividualVotes')) {
       globalShowIndividualVotes = payload.showIndividualVotes;
     }
-    if (payload.hasOwnProperty('voteScale')) {
-      globalVoteScale = payload.voteScale;
-    }
     io.emit('settingUpdate', { 
       allowVoteChanges: globalAllowVoteChanges,
-      showIndividualVotes: globalShowIndividualVotes,
-      voteScale: globalVoteScale
+      showIndividualVotes: globalShowIndividualVotes
     });
   });
 
