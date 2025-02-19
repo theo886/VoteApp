@@ -34,10 +34,14 @@ io.on('connection', (socket) => {
   });
 
   // When a user votes or updates their vote
-  socket.on('newVote', ({ userId, effort, impact }) => {
+  socket.on('newVote', ({ userId, effort, impact, allowVoteChanges }) => {
     const existingVote = votes.find(v => v.userId === userId);
 
     if (existingVote) {
+      // if changes are not allowed, ignore updates
+      if (!allowVoteChanges) {
+        return;
+      }
       // Remove old values
       totalEffort -= existingVote.effort;
       totalImpact -= existingVote.impact;

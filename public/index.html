@@ -92,8 +92,8 @@
   <!-- Bottom Bar -->
   <div class="bottom-bar">
     <button id="resetVotes">Reset</button>
-    <button id="copyVote">Copy Average</button>
-    <!-- New Settings button -->
+    <!-- Removed copy-average button -->
+    <!-- <button id="copyVote">Copy Average</button> -->
     <button id="openSettings" class="settings-btn">&#9881;</button>
     <span>Vote Count: <span id="voteCountDisplay">0/0</span></span>
   </div>
@@ -116,19 +116,34 @@
       </select>
     </label>
     <br /><br />
+    <!-- New allow vote changes option -->
+    <label>
+      Allow Vote Changes:
+      <input type="checkbox" id="allowVoteChanges" checked />
+    </label>
+    <br /><br />
     <button id="closeSettings">Close</button>
   </div>
 
   <script>
     const socket = io();
     const resetButton = document.getElementById('resetVotes');
-    const copyButton = document.getElementById('copyVote');
+    // Removed copy-average button element and its code
+    // const copyButton = document.getElementById('copyVote');
     const voteCountDisplay = document.getElementById('voteCountDisplay');
     // New settings elements
     const openSettings = document.getElementById('openSettings');
     const closeSettings = document.getElementById('closeSettings');
     const settingsMenu = document.getElementById('settingsMenu');
     const settingsOverlay = document.getElementById('settingsOverlay');
+    const allowVoteChangesInput = document.getElementById('allowVoteChanges');
+    
+    // Global flag for vote changes (default from settings)
+    let allowVoteChanges = allowVoteChangesInput.checked;
+    // Update flag on change
+    allowVoteChangesInput.addEventListener('change', (evt) => {
+      allowVoteChanges = evt.target.checked;
+    });
 
     // Generate or retrieve userId
     let userId = localStorage.getItem('userId');
@@ -226,39 +241,38 @@
       }
     });
 
-    // Click to vote using current rating range
+    // Updated click event: if vote changes not allowed and user has voted, ignore
     resultsChart.canvas.addEventListener('click', (evt) => {
+      // Check if vote changes are allowed or if user hasn't voted yet
+      if (!allowVoteChanges && resultsChart.data.datasets[1].data.length > 0) {
+        console.log("Vote changes are disabled.");
+        return;
+      }
       const xScale = resultsChart.scales.x;
       const yScale = resultsChart.scales.y;
-
       const xValue = xScale.getValueForPixel(evt.offsetX);
       const yValue = yScale.getValueForPixel(evt.offsetY);
-
       const effort = Math.round(Math.min(Math.max(xValue, ratingMin), ratingMax));
       const impact = Math.round(Math.min(Math.max(yValue, ratingMin), ratingMax));
-
-      socket.emit('newVote', { userId, effort, impact });
+      // Send the allowVoteChanges flag along with the vote
+      socket.emit('newVote', { userId, effort, impact, allowVoteChanges });
     });
 
-    // Reset button
+    // Reset button with copy feature
     resetButton.addEventListener('click', () => {
       socket.emit('reset');
-    });
-
-    // Copy Average Button: copies a tab-delimited string (e.g., "3	3")
-    copyButton.addEventListener('click', () => {
       const avgVote = resultsChart.data.datasets[2].data[0];
       if (avgVote) {
-        const textToCopy = `${avgVote.x}\t${avgVote.y}`;
-        navigator.clipboard.writeText(textToCopy)
-          .then(() => {
-            console.log('Average vote copied to clipboard!');
-          })
-          .catch((err) => {
-            console.error('Failed to copy average vote: ', err);
-          });
+      const textToCopy = `${avgVote.x}\t${avgVote.y}`;
+      navigator.clipboard.writeText(textToCopy)
+        .then(() => {
+        console.log('Average vote copied to clipboard!');
+        })
+        .catch((err) => {
+        console.error('Failed to copy average vote: ', err);
+        });
       } else {
-        console.log('No average vote to copy.');
+      console.log('No average vote to copy.');
       }
     });
 
