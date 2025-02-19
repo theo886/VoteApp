@@ -17,7 +17,7 @@
       align-items: center;
     }
 
-    /* A square chart container with padding */
+    /* Chart container styling */
     .chart-container {
       width: 100%;
       max-width: 600px;
@@ -34,14 +34,15 @@
       cursor: crosshair;
     }
 
-    /* Center the Reset button & vote count */
+    /* Bottom bar styling */
     .bottom-bar {
       width: 100%;
       max-width: 600px;
       display: flex;
+      flex-wrap: wrap;
       justify-content: center;
       align-items: center;
-      gap: 2rem;
+      gap: 1rem;
       padding: 1rem;
     }
 
@@ -49,24 +50,37 @@
       padding: 0.5rem 1rem;
       font-size: 1rem;
     }
+
+    .toggle-container {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
   </style>
 </head>
 <body>
-  <!-- Square chart container -->
+  <!-- Chart Container -->
   <div class="chart-container">
     <canvas id="resultsChart"></canvas>
   </div>
 
-  <!-- Bottom bar with Reset and vote count -->
+  <!-- Bottom Bar -->
   <div class="bottom-bar">
     <button id="resetVotes">Reset</button>
+    <button id="copyVote">Copy Vote</button>
     <span>Vote Count: <span id="voteCountDisplay">0/0</span></span>
+    <div class="toggle-container">
+      <label for="toggleScale">Use 1-10 Scale</label>
+      <input type="checkbox" id="toggleScale">
+    </div>
   </div>
 
   <script>
     const socket = io();
     const resetButton = document.getElementById('resetVotes');
+    const copyButton = document.getElementById('copyVote');
     const voteCountDisplay = document.getElementById('voteCountDisplay');
+    const toggleScaleCheckbox = document.getElementById('toggleScale');
 
     // Generate or retrieve userId
     let userId = localStorage.getItem('userId');
@@ -78,10 +92,10 @@
     // Register with the server
     socket.emit('register', { userId });
 
-    // Create the chart with 3 datasets:
-    // 0: Other Votes
-    // 1: Your Vote
-    // 2: Average
+    // Initial rating scale maximum (default 5)
+    let ratingMax = 5;
+
+    // Create the Chart.js scatter chart
     const ctx = document.getElementById('resultsChart').getContext('2d');
     const resultsChart = new Chart(ctx, {
       type: 'scatter',
@@ -92,21 +106,24 @@
             data: [],
             backgroundColor: 'rgba(255, 99, 132, 0.6)',
             borderColor: 'rgba(255, 99, 132, 1)',
-            pointRadius: 4
+            pointRadius: 4,
+            pointStyle: 'circle'
           },
           {
             label: 'Your Vote',
             data: [],
             backgroundColor: 'rgba(54, 162, 235, 0.6)',
             borderColor: 'rgba(54, 162, 235, 1)',
-            pointRadius: 6
+            pointRadius: 6,
+            pointStyle: 'circle'
           },
           {
             label: 'Average',
             data: [{ x: 0, y: 0 }],
             backgroundColor: 'rgba(75, 192, 192, 0.6)',
             borderColor: 'rgba(75, 192, 192, 1)',
-            pointRadius: 6
+            pointRadius: 6,
+            pointStyle: 'circle'
           }
         ]
       },
@@ -115,49 +132,78 @@
         maintainAspectRatio: false,
         plugins: {
           legend: {
-            position: 'bottom'
+            position: 'bottom',
+            labels: {
+              // Use point style (circles) in the legend
+              usePointStyle: true
+            }
           }
         },
         scales: {
           x: {
             type: 'linear',
             min: 1,
-            max: 5,
+            max: ratingMax,
             grid: {
-              color: (context) => {
-                // Bold grid line at 3 (center)
-                return context.tick.value === 3 ? '#000' : '#ccc';
+              color: function(context) {
+                const mid = Math.round((1 + ratingMax) / 2);
+                return context.tick.value === mid ? '#000' : '#ccc';
               }
             },
             ticks: { stepSize: 1 },
             title: {
               display: true,
               text: 'Effort',
-              font: { size: 24 } // Axis label 2x bigger
+              font: { size: 24 } // 2x bigger font
             }
           },
           y: {
             type: 'linear',
             min: 1,
-            max: 5,
+            max: ratingMax,
             grid: {
-              color: (context) => {
-                // Bold grid line at 3 (center)
-                return context.tick.value === 3 ? '#000' : '#ccc';
+              color: function(context) {
+                const mid = Math.round((1 + ratingMax) / 2);
+                return context.tick.value === mid ? '#000' : '#ccc';
               }
             },
             ticks: { stepSize: 1 },
             title: {
               display: true,
               text: 'Impact',
-              font: { size: 24 } // Axis label 2x bigger
+              font: { size: 24 } // 2x bigger font
             }
           }
         }
       }
     });
 
-    // Click to vote (ratings clamped between 1 and 5)
+    // Toggle scale change between 1-5 and 1-10
+    toggleScaleCheckbox.addEventListener('change', () => {
+      ratingMax = toggleScaleCheckbox.checked ? 10 : 5;
+      updateScaleConfig(ratingMax);
+    });
+
+    function updateScaleConfig(newMax) {
+      const mid = Math.round((1 + newMax) / 2);
+      resultsChart.options.scales.x.min = 1;
+      resultsChart.options.scales.x.max = newMax;
+      resultsChart.options.scales.x.grid.color = function(context) {
+        return context.tick.value === mid ? '#000' : '#ccc';
+      };
+      resultsChart.options.scales.x.ticks.stepSize = 1;
+      
+      resultsChart.options.scales.y.min = 1;
+      resultsChart.options.scales.y.max = newMax;
+      resultsChart.options.scales.y.grid.color = function(context) {
+        return context.tick.value === mid ? '#000' : '#ccc';
+      };
+      resultsChart.options.scales.y.ticks.stepSize = 1;
+      
+      resultsChart.update();
+    }
+
+    // Click to vote using current ratingMax
     resultsChart.canvas.addEventListener('click', (evt) => {
       const xScale = resultsChart.scales.x;
       const yScale = resultsChart.scales.y;
@@ -165,23 +211,40 @@
       const xValue = xScale.getValueForPixel(evt.offsetX);
       const yValue = yScale.getValueForPixel(evt.offsetY);
 
-      const effort = Math.round(Math.min(Math.max(xValue, 1), 5));
-      const impact = Math.round(Math.min(Math.max(yValue, 1), 5));
+      const effort = Math.round(Math.min(Math.max(xValue, 1), ratingMax));
+      const impact = Math.round(Math.min(Math.max(yValue, 1), ratingMax));
 
       socket.emit('newVote', { userId, effort, impact });
     });
 
-    // Reset
+    // Reset button
     resetButton.addEventListener('click', () => {
       socket.emit('reset');
     });
 
-    // Update vote count as a fraction (votes/users)
+    // Copy Vote Button: copies a 2-column, 1-row HTML table with your effort and impact values
+    copyButton.addEventListener('click', () => {
+      const userVote = resultsChart.data.datasets[1].data[0];
+      if(userVote) {
+        const tableHTML = `<table><tr><td>${userVote.x}</td><td>${userVote.y}</td></tr></table>`;
+        navigator.clipboard.writeText(tableHTML)
+          .then(() => {
+            console.log('Vote table copied to clipboard!');
+          })
+          .catch((err) => {
+            console.error('Failed to copy vote table: ', err);
+          });
+      } else {
+        console.log('No vote to copy.');
+      }
+    });
+
+    // Listen for vote count updates
     socket.on('voteCount', (data) => {
       voteCountDisplay.textContent = `${data.voteCount}/${data.userCount}`;
     });
 
-    // Only get 'update' if we're in the "voters" room
+    // Listen for chart data updates
     socket.on('update', (data) => {
       const userVote = data.allVotes.find(v => v.userId === userId);
       const otherVotes = data.allVotes.filter(v => v.userId !== userId);
