@@ -94,32 +94,24 @@
     <button id="resetVotes">Reset</button>
     <!-- Removed copy-average button -->
     <!-- <button id="copyVote">Copy Average</button> -->
-    <button id="openSettings" class="settings-btn">&#9881;</button>
     <span>Vote Count: <span id="voteCountDisplay">0/0</span></span>
+    <button id="openSettings" class="settings-btn">&#9881;</button>
   </div>
 
   <!-- Settings Overlay and Menu -->
   <div id="settingsOverlay"></div>
   <div id="settingsMenu">
     <h3>Settings</h3>
-    <!-- Placeholder settings -->
-    <label>
-      Enable Notifications:
-      <input type="checkbox" id="enableNotifications" />
-    </label>
-    <br /><br />
-    <label>
-      Default Vote Scale:
-      <select id="defaultVoteScale">
-        <option value="1-5">1-5</option>
-        <option value="1-10">1-10</option>
-      </select>
-    </label>
-    <br /><br />
     <!-- New allow vote changes option -->
     <label>
       Allow Vote Changes:
       <input type="checkbox" id="allowVoteChanges" checked />
+    </label>
+    <br /><br />
+    <!-- New show individual votes option -->
+    <label>
+      Show Individual Votes:
+      <input type="checkbox" id="showIndividualVotes" checked />
     </label>
     <br /><br />
     <button id="closeSettings">Close</button>
@@ -137,12 +129,22 @@
     const settingsMenu = document.getElementById('settingsMenu');
     const settingsOverlay = document.getElementById('settingsOverlay');
     const allowVoteChangesInput = document.getElementById('allowVoteChanges');
+    // New element for show individual votes
+    const showIndividualVotesInput = document.getElementById('showIndividualVotes');
     
-    // Global flag for vote changes (default from settings)
+    // Global flags for settings
     let allowVoteChanges = allowVoteChangesInput.checked;
-    // Update flag on change
+    let showIndividualVotes = showIndividualVotesInput.checked;
+    
+    // Update allowVoteChanges on change and emit updateSetting
     allowVoteChangesInput.addEventListener('change', (evt) => {
       allowVoteChanges = evt.target.checked;
+      socket.emit('updateSetting', { allowVoteChanges });
+    });
+    // Update showIndividualVotes on change and emit updateSetting
+    showIndividualVotesInput.addEventListener('change', (evt) => {
+      showIndividualVotes = evt.target.checked;
+      socket.emit('updateSetting', { showIndividualVotes });
     });
 
     // Generate or retrieve userId
@@ -159,7 +161,24 @@
     const ratingMin = 1;
     const ratingMax = 5;
 
-    // Create the Chart.js scatter chart
+    // Register custom plugin to draw a border around the legend
+    Chart.register({
+      id: 'legendBorder',
+      afterDraw: (chart, args, pluginOptions) => {
+        const legend = chart.legend;
+        if (!legend) return;
+        const ctx = chart.ctx;
+        const { left, top, width, height } = legend;
+        ctx.save();
+        const pad = pluginOptions.padding || 5;
+        ctx.strokeStyle = pluginOptions.borderColor || 'black';
+        ctx.lineWidth = pluginOptions.borderWidth || 1;
+        ctx.strokeRect(left - pad, top - pad, width + pad * 2, height + pad * 2);
+        ctx.restore();
+      }
+    });
+
+    // Create the Chart.js scatter chart with updated legend plugins
     const ctx = document.getElementById('resultsChart').getContext('2d');
     const resultsChart = new Chart(ctx, {
       type: 'scatter',
@@ -200,6 +219,11 @@
             labels: {
               usePointStyle: true
             }
+          },
+          legendBorder: {
+            borderColor: 'black',
+            borderWidth: 1,
+            padding: 5
           }
         },
         scales: {
@@ -254,8 +278,7 @@
       const yValue = yScale.getValueForPixel(evt.offsetY);
       const effort = Math.round(Math.min(Math.max(xValue, ratingMin), ratingMax));
       const impact = Math.round(Math.min(Math.max(yValue, ratingMin), ratingMax));
-      // Send the allowVoteChanges flag along with the vote
-      socket.emit('newVote', { userId, effort, impact, allowVoteChanges });
+      socket.emit('newVote', { userId, effort, impact });
     });
 
     // Reset button with copy feature
@@ -321,6 +344,18 @@
         y: data.averageImpact
       }];
 
+      resultsChart.update();
+    });
+
+    // Listen for global setting updates and update local UI accordingly
+    socket.on('settingUpdate', (data) => {
+      allowVoteChanges = data.allowVoteChanges;
+      showIndividualVotes = data.showIndividualVotes;
+      allowVoteChangesInput.checked = data.allowVoteChanges;
+      showIndividualVotesInput.checked = data.showIndividualVotes;
+      // Toggle individual votes dataset visibility:
+      // Assuming dataset 0 holds individual (other) votes.
+      resultsChart.data.datasets[0].hidden = !showIndividualVotes;
       resultsChart.update();
     });
   </script>
