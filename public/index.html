@@ -101,13 +101,27 @@
   <div id="settingsMenu">
     <h3>Settings</h3>
    
-    <!-- New allow vote changes option -->
+    <!-- Allow vote changes option -->
     <label>
       Allow Vote Changes:
       <input type="checkbox" id="allowVoteChanges" checked />
     </label>
     <br /><br />
-    <!-- Removed show individual votes option -->
+    
+    <!-- New scale option -->
+    <div>
+      <label>Rating Scale:</label>
+      <div>
+        <input type="radio" id="scale1to5" name="scaleOption" value="1-5" checked />
+        <label for="scale1to5">1-5 Scale</label>
+      </div>
+      <div>
+        <input type="radio" id="scale0to10" name="scaleOption" value="0-10" />
+        <label for="scale0to10">0-10 Scale</label>
+      </div>
+    </div>
+    <br />
+    
     <button id="closeSettings">Close</button>
   </div>
 
@@ -121,14 +135,35 @@
     const settingsMenu = document.getElementById('settingsMenu');
     const settingsOverlay = document.getElementById('settingsOverlay');
     const allowVoteChangesInput = document.getElementById('allowVoteChanges');
+    const scale1to5Radio = document.getElementById('scale1to5');
+    const scale0to10Radio = document.getElementById('scale0to10');
     
     // Global flag for allow vote changes only; always show individual votes.
     let allowVoteChanges = allowVoteChangesInput.checked;
+    
+    // Default scale is 1-5
+    let currentScale = {
+      min: 1,
+      max: 5
+    };
     
     // Update allowVoteChanges on change
     allowVoteChangesInput.addEventListener('change', (evt) => {
       allowVoteChanges = evt.target.checked;
       socket.emit('updateSetting', { allowVoteChanges });
+    });
+    
+    // Add event listeners for scale radio buttons
+    scale1to5Radio.addEventListener('change', () => {
+      if (scale1to5Radio.checked) {
+        updateScale(1, 5);
+      }
+    });
+
+    scale0to10Radio.addEventListener('change', () => {
+      if (scale0to10Radio.checked) {
+        updateScale(0, 10);
+      }
     });
     
     // Generate or retrieve userId
@@ -140,10 +175,6 @@
     
     // Register with the server
     socket.emit('register', { userId });
-    
-    // Fixed scale: 1–5
-    const ratingMin = 1;
-    const ratingMax = 5;
     
     // Create the Chart.js scatter chart
     const ctx = document.getElementById('resultsChart').getContext('2d');
@@ -197,11 +228,11 @@
         scales: {
           x: {
             type: 'linear',
-            min: ratingMin,
-            max: ratingMax,
+            min: currentScale.min,
+            max: currentScale.max,
             grid: {
               color: function(context) {
-                const mid = Math.round((ratingMin + ratingMax) / 2);
+                const mid = Math.round((currentScale.min + currentScale.max) / 2);
                 return context.tick.value === mid ? '#000' : '#ccc';
               }
             },
@@ -214,11 +245,11 @@
           },
           y: {
             type: 'linear',
-            min: ratingMin,
-            max: ratingMax,
+            min: currentScale.min,
+            max: currentScale.max,
             grid: {
               color: function(context) {
-                const mid = Math.round((ratingMin + ratingMax) / 2);
+                const mid = Math.round((currentScale.min + currentScale.max) / 2);
                 return context.tick.value === mid ? '#000' : '#ccc';
               }
             },
@@ -233,7 +264,40 @@
       }
     });
     
-    // Chart click event remains unchanged
+    // Function to update the scale
+    function updateScale(min, max) {
+      // Store the new scale values
+      currentScale.min = min;
+      currentScale.max = max;
+      
+      // Update the chart scales
+      resultsChart.options.scales.x.min = min;
+      resultsChart.options.scales.x.max = max;
+      resultsChart.options.scales.y.min = min;
+      resultsChart.options.scales.y.max = max;
+      
+      // Update the grid colors for the middle line
+      resultsChart.options.scales.x.grid.color = function(context) {
+        const mid = Math.round((min + max) / 2);
+        return context.tick.value === mid ? '#000' : '#ccc';
+      };
+      
+      resultsChart.options.scales.y.grid.color = function(context) {
+        const mid = Math.round((min + max) / 2);
+        return context.tick.value === mid ? '#000' : '#ccc';
+      };
+      
+      // Emit the scale change to the server so all clients are updated
+      socket.emit('updateSetting', { 
+        allowVoteChanges, 
+        scale: { min, max } 
+      });
+      
+      // Update the chart
+      resultsChart.update();
+    }
+    
+    // Chart click event - updated to use currentScale
     resultsChart.canvas.addEventListener('click', (evt) => {
       if (!allowVoteChanges && resultsChart.data.datasets[1].data.length > 0) {
         console.log("Vote changes are disabled.");
@@ -243,12 +307,18 @@
       const yScale = resultsChart.scales.y;
       const xValue = xScale.getValueForPixel(evt.offsetX);
       const yValue = yScale.getValueForPixel(evt.offsetY);
-      const effort = Math.round(Math.min(Math.max(xValue, ratingMin), ratingMax));
-      const impact = Math.round(Math.min(Math.max(yValue, ratingMin), ratingMax));
-      socket.emit('newVote', { userId, effort, impact, allowVoteChanges });
+      const effort = Math.round(Math.min(Math.max(xValue, currentScale.min), currentScale.max));
+      const impact = Math.round(Math.min(Math.max(yValue, currentScale.min), currentScale.max));
+      socket.emit('newVote', { 
+        userId, 
+        effort, 
+        impact, 
+        allowVoteChanges, 
+        scale: currentScale 
+      });
     });
     
-    // Reset button event remains unchanged
+    // Reset button event
     resetButton.addEventListener('click', () => {
       socket.emit('reset');
       const avgVote = resultsChart.data.datasets[2].data[0];
@@ -262,7 +332,7 @@
       }
     });
     
-    // Settings toggle functions remain unchanged
+    // Settings toggle functions
     function openSettingsMenu() {
       settingsOverlay.style.display = 'block';
       settingsMenu.style.display = 'block';
@@ -298,10 +368,44 @@
       resultsChart.update();
     });
     
-    // Listen for global setting updates and update allowVoteChanges only
+    // Listen for global setting updates
     socket.on('settingUpdate', (data) => {
+      // Update existing settings
       allowVoteChanges = data.allowVoteChanges;
       allowVoteChangesInput.checked = data.allowVoteChanges;
+      
+      // Handle scale updates
+      if (data.scale) {
+        currentScale = data.scale;
+        
+        // Update radio buttons
+        if (data.scale.min === 1 && data.scale.max === 5) {
+          scale1to5Radio.checked = true;
+          scale0to10Radio.checked = false;
+        } else if (data.scale.min === 0 && data.scale.max === 10) {
+          scale1to5Radio.checked = false;
+          scale0to10Radio.checked = true;
+        }
+        
+        // Update chart scales
+        resultsChart.options.scales.x.min = data.scale.min;
+        resultsChart.options.scales.x.max = data.scale.max;
+        resultsChart.options.scales.y.min = data.scale.min;
+        resultsChart.options.scales.y.max = data.scale.max;
+        
+        // Update the grid colors for the middle line
+        resultsChart.options.scales.x.grid.color = function(context) {
+          const mid = Math.round((data.scale.min + data.scale.max) / 2);
+          return context.tick.value === mid ? '#000' : '#ccc';
+        };
+        
+        resultsChart.options.scales.y.grid.color = function(context) {
+          const mid = Math.round((data.scale.min + data.scale.max) / 2);
+          return context.tick.value === mid ? '#000' : '#ccc';
+        };
+      }
+      
+      // Update the chart
       resultsChart.update();
     });
   </script>
