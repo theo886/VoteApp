@@ -17,6 +17,12 @@ let connectedUsers = 0;
 // Add global variable for allow vote changes
 let globalAllowVoteChanges = true;
 
+// Add global variable for the scale
+let globalScale = {
+  min: 1,
+  max: 5
+};
+
 app.use(express.static('public'));
 
 io.on('connection', (socket) => {
@@ -34,10 +40,20 @@ io.on('connection', (socket) => {
     // Send the current vote count (as fraction) to everyone
     socket.emit('voteCount', { voteCount, userCount: connectedUsers });
     io.emit('voteCount', { voteCount, userCount: connectedUsers });
+    
+    // Send current settings to newly connected client
+    socket.emit('settingUpdate', {
+      allowVoteChanges: globalAllowVoteChanges,
+      scale: globalScale
+    });
   });
 
   // When a user votes or updates their vote
   socket.on('newVote', ({ userId, effort, impact }) => {
+    // Ensure values are within the current scale
+    effort = Math.min(Math.max(effort, globalScale.min), globalScale.max);
+    impact = Math.min(Math.max(impact, globalScale.min), globalScale.max);
+    
     const existingVote = votes.find(v => v.userId === userId);
 
     if (existingVote) {
@@ -76,7 +92,47 @@ io.on('connection', (socket) => {
     if(payload.hasOwnProperty('allowVoteChanges')) {
       globalAllowVoteChanges = payload.allowVoteChanges;
     }
-    io.emit('settingUpdate', { allowVoteChanges: globalAllowVoteChanges });
+    
+    // Handle scale changes
+    if(payload.hasOwnProperty('scale')) {
+      const oldScale = { ...globalScale };
+      globalScale = payload.scale;
+      
+      // Optional: Convert existing votes if the scale changes
+      if (votes.length > 0) {
+        const oldMin = oldScale.min;
+        const oldMax = oldScale.max;
+        const newMin = globalScale.min;
+        const newMax = globalScale.max;
+        
+        // Only convert if scale actually changed
+        if (oldMin !== newMin || oldMax !== newMax) {
+          console.log(`Converting votes from scale ${oldMin}-${oldMax} to ${newMin}-${newMax}`);
+          
+          totalEffort = 0;
+          totalImpact = 0;
+          
+          votes.forEach(vote => {
+            // Convert effort and impact to new scale
+            vote.effort = convertValue(vote.effort, oldMin, oldMax, newMin, newMax);
+            vote.impact = convertValue(vote.impact, oldMin, oldMax, newMin, newMax);
+            
+            // Add to new totals
+            totalEffort += vote.effort;
+            totalImpact += vote.impact;
+          });
+          
+          // Update all clients with new data
+          io.to('voters').emit('update', getCurrentData());
+        }
+      }
+    }
+    
+    // Send the updated settings to all clients
+    io.emit('settingUpdate', { 
+      allowVoteChanges: globalAllowVoteChanges,
+      scale: globalScale
+    });
   });
 
   // Reset everything
@@ -117,6 +173,14 @@ function getCurrentData() {
     voteCount,
     allVotes: votes
   };
+}
+
+// Helper function to convert values between scales
+function convertValue(value, oldMin, oldMax, newMin, newMax) {
+  // Calculate percentage of position in old range
+  const percentage = (value - oldMin) / (oldMax - oldMin);
+  // Map to new range and round to nearest integer
+  return Math.round(percentage * (newMax - newMin) + newMin);
 }
 
 server.listen(3000, () => {
