@@ -4,7 +4,24 @@ const socketIo = require('socket.io');
 
 const app = express();
 const server = http.createServer(app);
-const io = socketIo(server);
+
+// Add CORS middleware
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+  next();
+});
+
+// Initialize Socket.IO with configuration for Azure
+const io = socketIo(server, {
+  transports: ['websocket', 'polling'],
+  pingTimeout: 60000,
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
+});
 
 // Totals and vote storage
 let totalEffort = 0;
@@ -183,6 +200,17 @@ function convertValue(value, oldMin, oldMax, newMin, newMax) {
   return Math.round(percentage * (newMax - newMin) + newMin);
 }
 
-server.listen(3000, () => {
-  console.log('Server listening on port 3000');
+// Use environment-provided port or default to 3000
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+  console.log(`Server listening on port ${PORT}`);
+});
+
+// Add graceful shutdown handler
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, shutting down gracefully');
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
 });
